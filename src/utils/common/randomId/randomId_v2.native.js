@@ -1,5 +1,5 @@
 // @flow
-import { NativeModules } from 'react-native'
+import NativeWMDatabaseBridge from '../../../specs/NativeWMDatabaseBridge'
 
 let randomIds = []
 let cur = 9999
@@ -8,7 +8,9 @@ let cur = 9999
 // Should be ported to Java too… or better yet, implemented in JSI
 export default function nativeRandomId_v2(): string {
   if (cur >= 64) {
-    randomIds = NativeModules.WMDatabaseBridge.getRandomIds().split(',')
+    randomIds = NativeWMDatabaseBridge?.getRandomIds
+      ? NativeWMDatabaseBridge.getRandomIds().split(',')
+      : []
     cur = 0
   }
 

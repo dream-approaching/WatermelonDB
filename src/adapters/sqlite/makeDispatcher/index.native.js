@@ -1,7 +1,7 @@
 // @flow
 /* eslint-disable global-require */
 
-import { NativeModules, Platform } from 'react-native'
+import { Platform } from 'react-native'
 import { type ConnectionTag, logger, invariant } from '../../../utils/common'
 import { fromPromise, type ResultCallback } from '../../../utils/fp/Result'
 import type {
@@ -12,7 +12,11 @@ import type {
   SqliteDispatcherOptions,
 } from '../type'
 
-const { WMDatabaseBridge, WMDatabaseJSIBridge } = NativeModules
+import NativeWMDatabaseBridge from '../../../specs/NativeWMDatabaseBridge'
+import NativeWMDatabaseJSIBridge from '../../../specs/NativeWMDatabaseJSIBridge'
+
+const WMDatabaseBridge = NativeWMDatabaseBridge
+const WMDatabaseJSIBridge = NativeWMDatabaseJSIBridge
 
 class SqliteNativeModulesDispatcher implements SqliteDispatcher {
   _tag: ConnectionTag
@@ -30,7 +34,7 @@ class SqliteNativeModulesDispatcher implements SqliteDispatcher {
     if (process.env.NODE_ENV !== 'production') {
       invariant(
         this._bridge,
-        `NativeModules.WMDatabaseBridge is not defined! This means that you haven't properly linked WatermelonDB native module. Refer to docs for instructions about installation (and the changelog if this happened after an upgrade).`,
+        `WMDatabaseBridge TurboModule is not defined! This means that you haven't properly linked WatermelonDB native module. Refer to docs for instructions about installation (and the changelog if this happened after an upgrade).`,
       )
 
       invariant(
@@ -130,12 +134,14 @@ export const makeDispatcher = (
 }
 
 const initializeJSI = () => {
+  console.log('%c watermelondbConsoleLogger initializeJSI:', 'color: #0e93e0;background: #aaefe5;', 'initializeJSI');
   if (global.nativeWatermelonCreateAdapter) {
     return true
   }
 
   const bridge = WMDatabaseBridge
-  if (bridge.initializeJSI) {
+  console.log('%c watermelondbConsoleLogger bridge:', 'color: #0e93e0;background: #aaefe5;', bridge);
+  if (bridge?.initializeJSI) {
     try {
       bridge.initializeJSI()
       return !!global.nativeWatermelonCreateAdapter
@@ -143,7 +149,7 @@ const initializeJSI = () => {
       logger.error('[SQLite] Failed to initialize JSI')
       logger.error(e)
     }
-  } else if (WMDatabaseJSIBridge && WMDatabaseJSIBridge.install) {
+  } else if (WMDatabaseJSIBridge?.install) {
     WMDatabaseJSIBridge.install()
     return !!global.nativeWatermelonCreateAdapter
   }

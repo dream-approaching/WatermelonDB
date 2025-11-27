@@ -1,8 +1,8 @@
 // @flow
 /* eslint-disable no-bitwise */
-import { NativeModules } from 'react-native'
 import nativeRandomId_v2 from './randomId_v2.native'
 import nativeRandomId_fallback from './fallback'
+import NativeWMDatabaseBridge from '../../../specs/NativeWMDatabaseBridge'
 
 const alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -25,7 +25,9 @@ function nativeRandomId_v1(): string {
         len++
       }
     } else {
-      randomNumbers = NativeModules.WMDatabaseBridge.getRandomBytes(256)
+      randomNumbers = NativeWMDatabaseBridge?.getRandomBytes
+        ? NativeWMDatabaseBridge.getRandomBytes(256)
+        : []
       cur = 0
     }
   }
@@ -34,9 +36,9 @@ function nativeRandomId_v1(): string {
 }
 
 const nativeRandomId: () => string = (() => {
-  if (NativeModules.WMDatabaseBridge?.getRandomIds) {
+  if (NativeWMDatabaseBridge?.getRandomIds) {
     return nativeRandomId_v2
-  } else if (NativeModules.WMDatabaseBridge?.getRandomBytes) {
+  } else if (NativeWMDatabaseBridge?.getRandomBytes) {
     return nativeRandomId_v1
   }
   return nativeRandomId_fallback
