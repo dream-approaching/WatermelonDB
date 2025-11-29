@@ -157,9 +157,42 @@ export class WatermelonDBBridge extends TurboModule {
       throw new Error('Expected getRandomBytes to be called with 256');
     }
     const random = cryptoFramework.createRandom();
-    const randomValues = random.generateRandom(count);
-    // todo
-    return Array.from([]);
+    const randomValues = random.generateRandomSync(count);
+    return Array.from(randomValues.data);
+  }
+
+  getRandomIds(): string {
+    const alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const batchSize = 64;
+    const idLength = 16;
+    // Total bytes needed: 64 IDs * 16 chars each = 1024 random bytes
+    // We need to ensure each byte can map to alphabet (0-61), so we'll generate enough bytes
+    const totalBytesNeeded = batchSize * idLength;
+
+    const random = cryptoFramework.createRandom();
+    // Generate all random bytes at once for better performance
+    const randomBytes = random.generateRandom(totalBytesNeeded);
+    
+    const ids: string[] = [];
+    let byteIndex = 0;
+
+    // Generate 64 IDs, each 16 characters long
+    for (let i = 0; i < batchSize; i++) {
+      let id = '';
+      
+      // Generate 16 characters from the alphabet
+      for (let j = 0; j < idLength; j++) {
+        // Use modulo to map byte value (0-255) to alphabet index (0-61)
+        const byteValue = randomBytes[byteIndex] % 62;
+        id += alphabet[byteValue];
+        byteIndex++;
+      }
+      
+      ids.push(id);
+    }
+
+    // Return comma-separated string
+    return ids.join(',');
   }
 
   invalidate(): void {
