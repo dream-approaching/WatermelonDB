@@ -162,16 +162,17 @@ export class WatermelonDBBridge extends TurboModule {
   }
 
   getRandomIds(): string {
+    console.log('watermelondbConsoleLogger getRandomIds:');
     const alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const batchSize = 64;
     const idLength = 16;
     // Total bytes needed: 64 IDs * 16 chars each = 1024 random bytes
-    // We need to ensure each byte can map to alphabet (0-61), so we'll generate enough bytes
     const totalBytesNeeded = batchSize * idLength;
 
     const random = cryptoFramework.createRandom();
-    // Generate all random bytes at once for better performance
-    const randomBytes = random.generateRandom(totalBytesNeeded);
+    // Use synchronous method for better performance in sync context
+    const randomDataBlob = random.generateRandomSync(totalBytesNeeded);
+    const randomBytes = Array.from(randomDataBlob.data);
     
     const ids: string[] = [];
     let byteIndex = 0;
@@ -183,7 +184,7 @@ export class WatermelonDBBridge extends TurboModule {
       // Generate 16 characters from the alphabet
       for (let j = 0; j < idLength; j++) {
         // Use modulo to map byte value (0-255) to alphabet index (0-61)
-        const byteValue = randomBytes[byteIndex] % 62;
+        const byteValue = (randomBytes[byteIndex] as number) % 62;
         id += alphabet[byteValue];
         byteIndex++;
       }
@@ -191,8 +192,10 @@ export class WatermelonDBBridge extends TurboModule {
       ids.push(id);
     }
 
-    // Return comma-separated string
-    return ids.join(',');
+    // Return comma-separated string (64 IDs joined by commas)
+    const result = ids.join(',');
+    console.log('watermelondbConsoleLogger getRandomIds result length:', result.length);
+    return result;
   }
 
   invalidate(): void {

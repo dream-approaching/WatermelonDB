@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -82,16 +83,18 @@ const ActionButton = ({ label, onPress, type = 'default' }) => {
       ? styles.secondaryButton
       : styles.primaryButton;
   return (
-    <View style={[styles.buttonWrapper, background]}>
-      <Text style={styles.buttonText} onPress={onPress}>
-        {label}
-      </Text>
-    </View>
+    <Pressable
+      style={[styles.buttonWrapper, background]}
+      onPress={onPress}
+      android_ripple={{ color: 'rgba(255, 255, 255, 0.2)' }}>
+      <Text style={styles.buttonText}>{label}</Text>
+    </Pressable>
   );
 };
 
 const MovieCard = ({ movie, onAddReview, onRename, onDelete }) => {
   const [reviews, setReviews] = useState([]);
+  const [movieInfo, setMovieInfo] = useState(movie.getMovie());
 
   useEffect(() => {
     const subscription = movie.reviews.observe().subscribe({
@@ -101,7 +104,23 @@ const MovieCard = ({ movie, onAddReview, onRename, onDelete }) => {
     return () => subscription.unsubscribe();
   }, [movie]);
 
-  const info = movie.getMovie();
+  // 订阅 movie 对象的变化，以便在更新时刷新 UI
+  useEffect(() => {
+    const subscription = movie.observe().subscribe({
+      next: (updatedMovie) => {
+        const newInfo = updatedMovie.getMovie();
+        console.log('%c watermelondbConsoleLogger movie card updated:', 'color: #0e93e0;background: #aaefe5;', {
+          id: updatedMovie.id,
+          newTitle: newInfo.title,
+        });
+        setMovieInfo(newInfo);
+      },
+      error: (error) => console.warn('订阅电影变化失败', error),
+    });
+    return () => subscription.unsubscribe();
+  }, [movie]);
+
+  const info = movieInfo;
 
   return (
     <View style={styles.card}>
@@ -140,6 +159,10 @@ const MovieScreen = () => {
   useEffect(() => {
     const subscription = moviesCollection.query().observe().subscribe({
       next: (list) => {
+        console.log('%c watermelondbConsoleLogger movies list updated:', 'color: #0e93e0;background: #aaefe5;', {
+          count: list.length,
+          titles: list.map(m => m.title),
+        });
         setMovies(list);
         setLoading(false);
       },
@@ -204,11 +227,25 @@ const MovieScreen = () => {
 
   const renameMovie = useCallback(
     async (movie) => {
-      await databaseInstance.write(async () => {
-        await movie.update((record) => {
-          record.title = `${record.title.split(' · ')[0]} · v${Math.floor(Math.random() * 10 + 1)}`;
+      try {
+        console.log('%c watermelondbConsoleLogger renameMovie before:', 'color: #0e93e0;background: #aaefe5;', movie.title);
+        await databaseInstance.write(async () => {
+          await movie.update((record) => {
+            const baseTitle = record.title.split(' · ')[0];
+            const newTitle = `${baseTitle} · v${Math.floor(Math.random() * 10 + 1)}`;
+            console.log('%c watermelondbConsoleLogger renameMovie updating:', 'color: #0e93e0;background: #aaefe5;', {
+              oldTitle: record.title,
+              baseTitle,
+              newTitle,
+            });
+            record.title = newTitle;
+          });
         });
-      });
+        console.log('%c watermelondbConsoleLogger renameMovie after:', 'color: #0e93e0;background: #aaefe5;', movie.title);
+      } catch (error) {
+        console.error('[WatermelonDemo] 随机改名失败', error);
+        Alert.alert('错误', `随机改名失败: ${error.message}`);
+      }
     },
     [databaseInstance],
   );
