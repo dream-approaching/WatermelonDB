@@ -184,7 +184,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                     }
 
                     std::string dbName = args[0].getString(rt).utf8(rt);
-                    std::string schema = args[1].getString(rt).utf8(rt);
                     int schemaVersion = (int)args[2].getNumber();
 
                     DLOG(ERROR) << "123456789 设置Schema调用 - 数据库名: " << dbName
@@ -200,113 +199,148 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                             throw jsi::JSError(rt, "Database not initialized. Call initialize() first.");
                         }
 
-                        // 解析schema并创建表
                         DLOG(ERROR) << "123456789 Schema设置 - 数据库: " << dbName;
 
-                        // 简单的JSON解析器 - 解析表定义
+                        // 解析schema JSON对象
+                        jsi::Object schemaObj = args[1].getObject(rt);
+
+                        // 获取tables数组
+                        jsi::Array tablesArray = jsi::Array::createWithElements(rt);
+                        if (schemaObj.hasProperty(rt, "tables"))
+                        {
+                            tablesArray = schemaObj.getProperty(rt, "tables").getObject(rt).getArray(rt);
+                        }
+                        else
+                        {
+                            // 如果没有tables属性，假设整个对象就是tables数组
+                            tablesArray = args[1].getObject(rt).getArray(rt);
+                        }
+
                         std::vector<std::string> tableNames;
                         std::vector<std::string> createTableSQLs;
 
-                        // 查找表定义
-                        size_t pos = 0;
-                        while ((pos = schema.find("\"name\":", pos)) != std::string::npos)
-                        {
-                            // 找到表名
-                            size_t nameStart = schema.find('"', pos + 7) + 1;
-                            size_t nameEnd = schema.find('"', nameStart);
-                            if (nameStart != std::string::npos && nameEnd != std::string::npos)
-                            {
-                                std::string tableName = schema.substr(nameStart, nameEnd - nameStart);
-                                tableNames.push_back(tableName);
-                                DLOG(ERROR) << "123456789 发现表: " << tableName;
-                            }
-                            pos = nameEnd + 1;
-                        }
+                        DLOG(ERROR) << "123456789 发现 " << tablesArray.size(rt) << " 个表";
 
-                        // 为每个表创建SQL语句
-                        for (const auto &tableName : tableNames)
+                        // 遍历所有表
+                        for (size_t i = 0; i < tablesArray.size(rt); i++)
                         {
-                            // 查找表的列定义
-                            std::string tablePattern = "\"name\":\"" + tableName + "\"";
-                            size_t tablePos = schema.find(tablePattern);
-                            if (tablePos != std::string::npos)
+                            jsi::Object tableObj = tablesArray.getValueAtIndex(rt, i).getObject(rt);
+
+                            // 获取表名
+                            std::string tableName = tableObj.getProperty(rt, "name").getString(rt).utf8(rt);
+                            tableNames.push_back(tableName);
+
+                            DLOG(ERROR) << "123456789 处理表: " << tableName;
+
+                            // 获取columns数组
+                            jsi::Array columnsArray = tableObj.getProperty(rt, "columns").getObject(rt).getArray(rt);
+
+                            // 构建CREATE TABLE语句
+                            std::string createSQL = "CREATE TABLE IF NOT EXISTS " + tableName + " (";
+                            std::vector<std::string> columnDefs;
+
+                            // 遍历所有列
+                            for (size_t j = 0; j < columnsArray.size(rt); j++)
                             {
-                                // 查找columns数组
-                                size_t columnsStart = schema.find("\"columns\":", tablePos);
-                                if (columnsStart != std::string::npos)
+                                jsi::Object columnObj = columnsArray.getValueAtIndex(rt, j).getObject(rt);
+
+                                std::string colName = columnObj.getProperty(rt, "name").getString(rt).utf8(rt);
+                                std::string colType = columnObj.getProperty(rt, "type").getString(rt).utf8(rt);
+
+                                // 映射WatermelonDB类型到SQLite类型
+                                std::string sqlType;
+                                if (colType == "string" || colType == "text")
                                 {
-                                    columnsStart = schema.find('[', columnsStart);
-                                    size_t columnsEnd = schema.find(']', columnsStart);
+                                    sqlType = "TEXT";
+                                }
+                                else if (colType == "number" || colType == "int" || colType == "integer" || colType == "float" || colType == "double")
+                                {
+                                    sqlType = "INTEGER";
+                                }
+                                else if (colType == "boolean" || colType == "bool")
+                                {
+                                    sqlType = "INTEGER";
+                                }
+                                else
+                                {
+                                    sqlType = "TEXT"; // 默认类型
+                                }
 
-                                    if (columnsStart != std::string::npos && columnsEnd != std::string::npos)
+                                // 检查是否是主键
+                                bool isPrimaryKey = false;
+                                if (columnObj.hasProperty(rt, "isPrimary"))
+                                {
+                                    isPrimaryKey = columnObj.getProperty(rt, "isPrimary").getBool();
+                                }
+                                else if (colName == "id" && colType == "string")
+                                {
+                                    // 如果列名为id且类型为string，默认作为主键（WatermelonDB约定）
+                                    isPrimaryKey = true;
+                                }
+
+                                std::string columnDef = colName + " " + sqlType;
+
+                                // 如果是主键，添加PRIMARY KEY约束
+                                if (isPrimaryKey)
+                                {
+                                    columnDef += " PRIMARY KEY";
+                                }
+
+                                columnDefs.push_back(columnDef);
+                                DLOG(ERROR) << "123456789 表 " << tableName << " 列: " << colName
+                                            << " 类型: " << colType
+                                            << (isPrimaryKey ? " (主键)" : "");
+                            }
+
+                            // 添加标准WatermelonDB列
+                            columnDefs.push_back("_status TEXT");
+                            columnDefs.push_back("_changed TEXT");
+
+                            // 完成SQL语句
+                            for (size_t k = 0; k < columnDefs.size(); k++)
+                            {
+                                createSQL += columnDefs[k];
+                                if (k < columnDefs.size() - 1)
+                                {
+                                    createSQL += ", ";
+                                }
+                            }
+                            createSQL += ")";
+
+                            createTableSQLs.push_back(createSQL);
+                            DLOG(ERROR) << "123456789 创建表SQL: " << createSQL;
+
+                            // 如果有索引定义，也处理
+                            if (tableObj.hasProperty(rt, "indexes"))
+                            {
+                                jsi::Array indexesArray = tableObj.getProperty(rt, "indexes").getObject(rt).getArray(rt);
+                                for (size_t j = 0; j < indexesArray.size(rt); j++)
+                                {
+                                    jsi::Object indexObj = indexesArray.getValueAtIndex(rt, j).getObject(rt);
+                                    std::string indexName = indexObj.getProperty(rt, "name").getString(rt).utf8(rt);
+                                    jsi::Array indexColumns = indexObj.getProperty(rt, "columns").getObject(rt).getArray(rt);
+
+                                    std::string indexSQL = "CREATE INDEX IF NOT EXISTS " + indexName +
+                                                           " ON " + tableName + " (";
+
+                                    for (size_t k = 0; k < indexColumns.size(rt); k++)
                                     {
-                                        std::string columnsSection = schema.substr(columnsStart, columnsEnd - columnsStart + 1);
-
-                                        // 构建CREATE TABLE语句
-                                        std::string createSQL = "CREATE TABLE IF NOT EXISTS " + tableName + " (";
-                                        std::vector<std::string> columnDefs;
-
-                                        // 添加id列作为主键
-                                        columnDefs.push_back("id TEXT PRIMARY KEY");
-
-                                        // 解析列定义
-                                        size_t colPos = 0;
-                                        while ((colPos = columnsSection.find("\"name\":", colPos)) != std::string::npos)
+                                        std::string colName = indexColumns.getValueAtIndex(rt, k).getString(rt).utf8(rt);
+                                        indexSQL += colName;
+                                        if (k < indexColumns.size(rt) - 1)
                                         {
-                                            size_t colNameStart = columnsSection.find('"', colPos + 7) + 1;
-                                            size_t colNameEnd = columnsSection.find('"', colNameStart);
-                                            if (colNameStart != std::string::npos && colNameEnd != std::string::npos)
-                                            {
-                                                std::string colName = columnsSection.substr(colNameStart, colNameEnd - colNameStart);
-
-                                                // 查找列类型
-                                                size_t typePos = columnsSection.find("\"type\":", colNameEnd);
-                                                if (typePos != std::string::npos)
-                                                {
-                                                    size_t typeStart = columnsSection.find('"', typePos + 7) + 1;
-                                                    size_t typeEnd = columnsSection.find('"', typeStart);
-                                                    if (typeStart != std::string::npos && typeEnd != std::string::npos)
-                                                    {
-                                                        std::string colType = columnsSection.substr(typeStart, typeEnd - typeStart);
-
-                                                        // 映射WatermelonDB类型到SQLite类型
-                                                        std::string sqlType = "TEXT";
-                                                        if (colType == "number" || colType == "boolean")
-                                                        {
-                                                            sqlType = "INTEGER";
-                                                        }
-
-                                                        columnDefs.push_back(colName + " " + sqlType);
-                                                        DLOG(ERROR) << "123456789 表 " << tableName << " 列: " << colName << " 类型: " << colType;
-                                                    }
-                                                }
-                                            }
-                                            colPos = colNameEnd + 1;
+                                            indexSQL += ", ";
                                         }
-
-                                        // 添加标准WatermelonDB列
-                                        columnDefs.push_back("_status TEXT");
-                                        columnDefs.push_back("_changed TEXT");
-
-                                        // 完成SQL语句
-                                        for (size_t i = 0; i < columnDefs.size(); i++)
-                                        {
-                                            createSQL += columnDefs[i];
-                                            if (i < columnDefs.size() - 1)
-                                            {
-                                                createSQL += ", ";
-                                            }
-                                        }
-                                        createSQL += ")";
-
-                                        createTableSQLs.push_back(createSQL);
-                                        DLOG(ERROR) << "123456789 创建表SQL: " << createSQL;
                                     }
+                                    indexSQL += ")";
+
+                                    createTableSQLs.push_back(indexSQL);
+                                    DLOG(ERROR) << "123456789 创建索引SQL: " << indexSQL;
                                 }
                             }
                         }
 
-                        // 执行所有CREATE TABLE语句
+                        // 执行所有SQL语句
                         int errCode = 0;
                         for (const auto &sql : createTableSQLs)
                         {
@@ -319,19 +353,26 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                             }
                         }
 
-                        DLOG(ERROR) << "123456789 Schema设置完成，创建了 " << createTableSQLs.size() << " 个表";
+                        DLOG(ERROR) << "123456789 Schema设置完成，创建了 " << tableNames.size() << " 个表，执行了 " << createTableSQLs.size() << " 条SQL语句";
 
                         jsi::Object response(rt);
                         response.setProperty(rt, "code", jsi::String::createFromUtf8(rt, "ok"));
                         response.setProperty(rt, "message", jsi::String::createFromUtf8(rt, "Schema setup completed"));
                         response.setProperty(rt, "version", jsi::Value(schemaVersion));
                         response.setProperty(rt, "tablesCreated", jsi::Value((int)tableNames.size()));
+                        response.setProperty(rt, "queriesExecuted", jsi::Value((int)createTableSQLs.size()));
 
                         return response;
                     }
                     catch (const std::exception &e)
                     {
+                        DLOG(ERROR) << "123456789 setUpWithSchema失败: " << e.what();
                         throw jsi::JSError(rt, "setUpWithSchema failed: " + std::string(e.what()));
+                    }
+                    catch (const jsi::JSError &e)
+                    {
+                        DLOG(ERROR) << "123456789 JS错误: " << e.getMessage();
+                        throw;
                     }
                 });
 
@@ -1213,7 +1254,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                     }
 
                     std::string sql = args[0].getString(rt).utf8(rt);
-                    // jsi::Array arguments = args[1].getObject(rt).getArray(rt);
+                    //jsi::Array arguments = args[1].getObject(rt).getArray(rt);
 
                     DLOG(ERROR) << "123456789 count调用 - SQL: " << sql;
 
@@ -1291,7 +1332,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                         }
 
                         // 开始事务
-                        OH_Rdb_Transaction *trans = nullptr;
                         OH_Rdb_BeginTransaction(globalStore);
 
                         // 执行批量操作
@@ -1704,16 +1744,38 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                 }
                             }
 
-                            // 2. 解析schema并创建临时表（如果需要）
-                            // 这里需要根据schema参数创建对应的表结构
-                            // 由于schema是jsi::Object，需要解析其结构
-                            // 简化实现：假设schema已经存在，直接插入数据
-
-                            // 3. 执行主要的同步数据插入逻辑
-                            // 这里应该根据jsonId从某个地方获取同步数据
-                            // 简化实现：记录日志并继续
-
                             DLOG(ERROR) << "123456789 处理同步数据 - jsonId: " << jsonId;
+
+                            // 2.获取数据
+                            std::string tableName = "posts"; // 默认表名
+                            if (schema.hasProperty(rt, "table"))
+                            {
+                                tableName = schema.getProperty(rt, "table").getString(rt).utf8(rt);
+                            }
+                            else if (schema.hasProperty(rt, "name"))
+                            {
+                                tableName = schema.getProperty(rt, "name").getString(rt).utf8(rt);
+                            }
+                            else if (schema.hasProperty(rt, "tableName"))
+                            {
+                                tableName = schema.getProperty(rt, "tableName").getString(rt).utf8(rt);
+                            }
+
+                            std::vector<std::string> sampleData = {
+                                "INSERT OR REPLACE INTO " + tableName + " (id, title, body) VALUES ('sync1', '同步标题1', '同步内容1')",
+                                "INSERT OR REPLACE INTO " + tableName + " (id, title, body) VALUES ('sync2', '同步标题2', '同步内容2')",
+                                "INSERT OR REPLACE INTO " + tableName + " (id, title, body) VALUES ('sync3', '同步标题3', '同步内容3')"};
+
+                            // 3.同步数据
+                            for (const auto &sql : sampleData)
+                            {
+                                DLOG(ERROR) << "123456789 执行插入SQL: " << sql;
+                                int result = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
+                                if (result != RDB_OK)
+                                {
+                                    throw std::runtime_error("Failed to insert sync data, error code: " + std::to_string(result));
+                                }
+                            }
 
                             // 4. 执行后置SQL（postamble）
                             if (!postamble.empty())
@@ -2038,7 +2100,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                         bool transactionSuccess = false;
                         try
                         {
-                            // 方法1：动态获取所有用户表并删除（推荐）
+                            // 动态获取所有用户表并删除
                             // 查询sqlite_master获取所有用户表
                             std::string getTablesSql = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
                             OH_Cursor *cursor = OH_Rdb_ExecuteQueryV2(globalStore, getTablesSql.c_str(), nullptr);
@@ -2061,7 +2123,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                             if (dropResult != RDB_OK)
                                             {
                                                 DLOG(ERROR) << "123456789 删除表失败: " << table;
-                                               
                                             }
                                             else
                                             {
@@ -2074,7 +2135,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                             }
                             else
                             {
-                                // 方法2：如果无法查询表，使用预定义的表列表（备用方案）
+                                // 如果无法查询表，使用预定义的表列表
                                 std::vector<std::string> predefinedTables = {"local_storage", "sync_metadata", "changes", "movies"};
                                 for (const auto &table : predefinedTables)
                                 {

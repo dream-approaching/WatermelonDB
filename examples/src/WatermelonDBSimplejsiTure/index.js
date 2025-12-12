@@ -23,7 +23,23 @@ const ALL_METHODS = [
 const DANGEROUS_METHODS = ['unsafeResetDatabase'];
 
 // 测试用Schema（创建movies表）
-const DEFAULT_SCHEMA = JSON.stringify([
+const DEFAULT_SCHEMA = JSON.stringify({
+  tables: [
+    {
+      name: 'posts',
+      columns: [
+        { name: 'id', type: 'string', isPrimary: true },
+        { name: 'title', type: 'string' },
+        { name: 'body', type: 'string' },
+        { name: 'author_id', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' }
+      ],
+      indexes: [
+        { name: 'posts_author_id_idx', columns: ['author_id'] },
+        { name: 'posts_created_at_idx', columns: ['created_at'] }
+      ]
+    },
     {
       name: 'movies',
       columns: [
@@ -34,7 +50,7 @@ const DEFAULT_SCHEMA = JSON.stringify([
       ]
     }
   ]
-);
+});
 
 // 测试用批量插入数据
 const DEFAULT_BATCH_JSON = JSON.stringify([
@@ -115,7 +131,7 @@ const WatermelonDBSimplejsiTure = () => {
       addLog('success', '✅ 适配器创建成功');
       return newAdapter;
     } catch (error) {
-      console.log( `❌ 适配器创建失败: ${error.message}`);
+      addLog('error', '❌ 适配器创建失败: ${error.message}');
       throw error;
     }
   }, [addLog, dbName]);
@@ -136,29 +152,27 @@ const WatermelonDBSimplejsiTure = () => {
     setLoading(true);
     try {
       addLog('info', '🚀 开始初始化测试数据库（创建表+插入测试数据）...');
-      console.log(11111111)
       // 1. 初始化数据库
       await adapter.initialize(dbName, parseInt(dbVersion));
       addLog('success', '✅ 数据库初始化完成');
 
-      console.log(33333)
-
       // 2. 设置Schema（创建movies表）
       await adapter.setUpWithSchema(
-          dbName, schema, parseInt(dbVersion)
+          dbName, JSON.parse(DEFAULT_SCHEMA) , parseInt(dbVersion)
       );
-      console.log(444444)
       addLog('success', '✅ movies表创建成功');
 
       // 3. 批量插入测试数据
       const operations = JSON.parse(batchJson);
       await adapter.batch(operations);
       addLog('success', '✅ 测试数据插入完成');
-
+      console.log(operations)
       // 4. 查询验证数据
-      const result = await adapter.query('movies', 'SELECT * FROM movies');
+      const result = await adapter.query('movies', 'year > 2012', []);
+      console.log(result)
       setTestDataResult(result);
-      addLog('success', `✅ 初始化验证：共插入 ${result?.length || 0} 条测试数据`);
+      addLog('success', `✅ 查到${result?.length || 0} 条数据`);
+      addLog('success', `✅ 查到${result?.length? result : ''} 条数据`);
     } catch (error) {
       addLog('error', `❌ 测试数据库初始化失败: ${error.message}`);
     } finally {
@@ -192,8 +206,8 @@ const WatermelonDBSimplejsiTure = () => {
       addLog('success', '✅ 单条测试数据插入成功');
       
       // 查询更新后的数据
-      const result = await adapter.query('movies', 'SELECT * FROM movies');
-      setTestDataResult(result);
+      // const result = await adapter.query('movies', '' , []);
+      // setTestDataResult(result);
     } catch (error) {
       addLog('error', `❌ 插入测试数据失败: ${error.message}`);
     } finally {
@@ -227,8 +241,8 @@ const WatermelonDBSimplejsiTure = () => {
       addLog('success', '✅ 测试数据更新成功');
       
       // 查询更新后的数据
-      const result = await adapter.query('movies', 'SELECT * FROM movies');
-      setTestDataResult(result);
+      // const result = await adapter.query('movies', 'SELECT * FROM movies');
+      // setTestDataResult(result);
     } catch (error) {
       addLog('error', `❌ 更新测试数据失败: ${error.message}`);
     } finally {
@@ -245,20 +259,21 @@ const WatermelonDBSimplejsiTure = () => {
     }
     setLoading(true);
     try {
-      addLog('info', `🔧 删除测试数据：ID=${findId}`);
+      addLog('info', `🔧 删除测试数据：ID=${newMovieId}`);
       const batchOps = [
         {
           type: 'DELETE',
           table: 'movies',
-          id: findId
+          id: newMovieId
         }
       ];
+      addLog('success', `${newMovieId}`);
       await adapter.batch(batchOps);
       addLog('success', '✅ 测试数据删除成功');
       
       // 查询更新后的数据
-      const result = await adapter.query('movies', 'SELECT * FROM movies');
-      setTestDataResult(result);
+      // const result = await adapter.query('movies', 'SELECT * FROM movies');
+      // setTestDataResult(result);
     } catch (error) {
       addLog('error', `❌ 删除测试数据失败: ${error.message}`);
     } finally {
@@ -336,7 +351,7 @@ const WatermelonDBSimplejsiTure = () => {
     setLoading(true);
     try {
       addLog('info', `🔧 调用 count 方法，参数：table=${tableName}, sql=${countSql}`);
-      const result = adapter.count(tableName, countSql);
+      const result = adapter.count(countSql, []);
       setTestDataResult([{ count: result }]); // 存入结果展示区
       addLog('success', `✅ count 调用成功，返回: ${result}`);
     } catch (error) {
@@ -357,9 +372,9 @@ const WatermelonDBSimplejsiTure = () => {
       addLog('success', `✅ batch 调用成功，返回: ${JSON.stringify(result || 'null')}`);
       
       // 操作后查询验证
-      const verifyResult = await adapter.query('movies', 'SELECT * FROM movies');
-      setTestDataResult(verifyResult);
-      addLog('info', `✅ 批量操作验证：当前数据共 ${verifyResult?.length || 0} 条`);
+      // const verifyResult = await adapter.query('movies', 'SELECT * FROM movies');
+      // setTestDataResult(verifyResult);
+      // addLog('info', `✅ 批量操作验证：当前数据共 ${verifyResult?.length || 0} 条`);
     } catch (error) {
       addLog('error', `❌ batch 调用失败: ${error.message}`);
     } finally {
@@ -377,9 +392,9 @@ const WatermelonDBSimplejsiTure = () => {
       addLog('success', `✅ setLocal 调用成功，返回: ${JSON.stringify(result || 'null')}`);
       
       // 验证存储结果
-      const getResult = adapter.getLocal(localKey);
-      setTestDataResult([{ localKey, localValue: getResult }]);
-      addLog('info', `✅ 本地存储验证：读取到 ${localKey} = ${getResult}`);
+      // const getResult = adapter.getLocal(localKey);
+      // setTestDataResult([{ localKey, localValue: getResult }]);
+      // addLog('info', `✅ 本地存储验证：读取到 ${localKey} = ${getResult}`);
     } catch (error) {
       addLog('error', `❌ setLocal 调用失败: ${error.message}`);
     } finally {
@@ -427,7 +442,7 @@ const WatermelonDBSimplejsiTure = () => {
     setLoading(true);
     try {
       addLog('info', `🔧 调用 queryIds 方法，参数：table=${tableName}, sql=${sql}`);
-      const result = adapter.queryIds(tableName, { arguments: [] });
+      const result = adapter.queryIds(sql, { arguments: [] });
       setTestDataResult([{ ids: result }]);
       addLog('success', `✅ queryIds 调用成功，返回: ${JSON.stringify(result || 'null')}`);
     } catch (error) {
@@ -923,6 +938,34 @@ const WatermelonDBSimplejsiTure = () => {
               disabled={loading}
             >
               <Text style={styles.btnText}>getLocal</Text>
+            </Pressable>
+          </View>
+          <View style={styles.btnGroup}>
+            <Pressable 
+              style={({ pressed }) => [
+                styles.btn, 
+                styles.btnCommon, 
+                styles.smallBtn, 
+                loading && styles.btnDisabled,
+                pressed && !loading && styles.btnPressed
+              ]} 
+              onPress={testQueryIds} 
+              disabled={loading}
+            >
+              <Text style={styles.btnText}>testQueryIds</Text>
+            </Pressable>
+            <Pressable 
+              style={({ pressed }) => [
+                styles.btn, 
+                styles.btnCommon, 
+                styles.smallBtn, 
+                loading && styles.btnDisabled,
+                pressed && !loading && styles.btnPressed
+              ]} 
+              onPress={testUnsafeQueryRaw} 
+              disabled={loading}
+            >
+              <Text style={styles.btnText}>UnsafeQueryRaw</Text>
             </Pressable>
           </View>
         </View>
