@@ -66,6 +66,7 @@ export default function MainPage() {
               onPress={() => setCurrentScreen('realtion')}
               style={styles.button}
             />
+            <Text style={styles.titleMini}>JSI: false</Text>
             <Button
               title="进入jsiTure测试页面"
               onPress={() => setCurrentScreen('jsiTure')}
@@ -105,7 +106,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    marginBottom: 40,
+    marginBottom: 24,
+  },
+  titleMini: {
+    fontSize: 16,
+    marginBottom: 12,
   },
   backButtonContainer: {
     marginTop:50,
