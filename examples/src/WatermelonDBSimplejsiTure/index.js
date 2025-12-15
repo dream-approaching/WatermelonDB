@@ -26,21 +26,6 @@ const DANGEROUS_METHODS = ['unsafeResetDatabase'];
 const DEFAULT_SCHEMA = JSON.stringify({
   tables: [
     {
-      name: 'posts',
-      columns: [
-        { name: 'id', type: 'string', isPrimary: true },
-        { name: 'title', type: 'string' },
-        { name: 'body', type: 'string' },
-        { name: 'author_id', type: 'string' },
-        { name: 'created_at', type: 'number' },
-        { name: 'updated_at', type: 'number' }
-      ],
-      indexes: [
-        { name: 'posts_author_id_idx', columns: ['author_id'] },
-        { name: 'posts_created_at_idx', columns: ['created_at'] }
-      ]
-    },
-    {
       name: 'movies',
       columns: [
         { name: 'id', type: 'string', isPrimary: true },
@@ -56,13 +41,13 @@ const DEFAULT_SCHEMA = JSON.stringify({
 const DEFAULT_BATCH_JSON = JSON.stringify([
   {
     type: 'INSERT',
-    table: 'movies',
-    values: { id: 'movie1', title: 'Inception', year: 2010, rating: 8.8 }
+    sql: 'INSERT INTO movies (id, title, year, rating) VALUES (?, ?, ?, ?)',
+    arguments: ['疯狂动物城2', 'Inception', 2016, 9.2]
   },
   {
     type: 'INSERT',
-    table: 'movies',
-    values: { id: 'movie2', title: 'Interstellar', year: 2014, rating: 9.4 }
+    sql: 'INSERT INTO movies (id, title, year, rating) VALUES (?, ?, ?, ?)',
+    arguments: ['movie777', 'Interstellar', 2010, 8.8]
   }
 ], null, 2);
 
@@ -81,6 +66,7 @@ const WatermelonDBSimplejsiTure = () => {
   const [tableName, setTableName] = useState('movies');
   const [findId, setFindId] = useState('movie1');
   const [sql, setSql] = useState('SELECT * FROM movies');
+  const [sqlArray, setSqlArray] = useState('SELECT * FROM movies LIMIT 1');
   const [countSql, setCountSql] = useState('SELECT COUNT(*) FROM movies');
   const [batchJson, setBatchJson] = useState(DEFAULT_BATCH_JSON);
   const [localKey, setLocalKey] = useState('app_config');
@@ -166,13 +152,10 @@ const WatermelonDBSimplejsiTure = () => {
       const operations = JSON.parse(batchJson);
       await adapter.batch(operations);
       addLog('success', '✅ 测试数据插入完成');
-      console.log(operations)
       // 4. 查询验证数据
-      const result = await adapter.query('movies', 'year > 2012', []);
-      console.log(result)
+      const result = await adapter.query('SELECT * FROM movies');
       setTestDataResult(result);
       addLog('success', `✅ 查到${result?.length || 0} 条数据`);
-      addLog('success', `✅ 查到${result?.length? result : ''} 条数据`);
     } catch (error) {
       addLog('error', `❌ 测试数据库初始化失败: ${error.message}`);
     } finally {
@@ -189,25 +172,20 @@ const WatermelonDBSimplejsiTure = () => {
     }
     setLoading(true);
     try {
-      addLog('info', `🔧 插入单条测试数据：ID=${newMovieId}, 标题=${newMovieTitle}`);
       const batchOps = [
         {
           type: 'INSERT',
-          table: 'movies',
-          values: {
-            id: newMovieId,
-            title: newMovieTitle,
-            year: parseInt(newMovieYear),
-            rating: parseFloat(newMovieRating)
-          }
+          sql: 'INSERT INTO movies (id, title, year, rating) VALUES (?, ?, ?, ?)',
+          arguments: [newMovieId, newMovieTitle, parseInt(newMovieYear), parseFloat(newMovieRating)]
         }
       ];
+      console.log(batchOps)
       await adapter.batch(batchOps);
       addLog('success', '✅ 单条测试数据插入成功');
       
       // 查询更新后的数据
-      // const result = await adapter.query('movies', '' , []);
-      // setTestDataResult(result);
+      const result = await adapter.query('SELECT * FROM movies LIMIT 1');
+      setTestDataResult(result);
     } catch (error) {
       addLog('error', `❌ 插入测试数据失败: ${error.message}`);
     } finally {
@@ -228,21 +206,16 @@ const WatermelonDBSimplejsiTure = () => {
       const batchOps = [
         {
           type: 'UPDATE',
-          table: 'movies',
-          id: findId,
-          values: {
-            title: newMovieTitle,
-            year: parseInt(newMovieYear),
-            rating: parseFloat(newMovieRating)
-          }
+          sql: 'UPDATE movies SET title = ?, year = ?, rating = ? WHERE id = ?',
+          arguments: [ newMovieTitle, parseInt(newMovieYear), parseFloat(newMovieRating), newMovieId]
         }
       ];
       await adapter.batch(batchOps);
       addLog('success', '✅ 测试数据更新成功');
       
       // 查询更新后的数据
-      // const result = await adapter.query('movies', 'SELECT * FROM movies');
-      // setTestDataResult(result);
+      const result = await adapter.query('SELECT * FROM movies');
+      setTestDataResult(result);
     } catch (error) {
       addLog('error', `❌ 更新测试数据失败: ${error.message}`);
     } finally {
@@ -263,8 +236,8 @@ const WatermelonDBSimplejsiTure = () => {
       const batchOps = [
         {
           type: 'DELETE',
-          table: 'movies',
-          id: newMovieId
+          sql: 'DELETE FROM movies WHERE id = ?',
+          arguments: [ newMovieId]
         }
       ];
       addLog('success', `${newMovieId}`);
@@ -272,8 +245,8 @@ const WatermelonDBSimplejsiTure = () => {
       addLog('success', '✅ 测试数据删除成功');
       
       // 查询更新后的数据
-      // const result = await adapter.query('movies', 'SELECT * FROM movies');
-      // setTestDataResult(result);
+      const result = await adapter.query('SELECT * FROM movies');
+      setTestDataResult(result);
     } catch (error) {
       addLog('error', `❌ 删除测试数据失败: ${error.message}`);
     } finally {
@@ -291,7 +264,7 @@ const WatermelonDBSimplejsiTure = () => {
       const result = adapter.initialize(dbName, parseInt(dbVersion));
       addLog('success', `✅ initialize 调用成功，返回: ${JSON.stringify(result || 'null')}`);
     } catch (error) {
-      addLog('error', `❌ initialize 调用失败: ${error.message}`);
+      console.log(`❌ initialize 调用失败: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -335,7 +308,7 @@ const WatermelonDBSimplejsiTure = () => {
     setLoading(true);
     try {
       addLog('info', `🔧 调用 query 方法，参数：table=${tableName}, sql=${sql}`);
-      const result = adapter.query(tableName, sql);
+      const result = adapter.query('SELECT * FROM movies');
       setTestDataResult(result); // 存入结果展示区
       addLog('success', `✅ query 调用成功，返回: ${JSON.stringify(result || 'null')}`);
     } catch (error) {
@@ -372,9 +345,9 @@ const WatermelonDBSimplejsiTure = () => {
       addLog('success', `✅ batch 调用成功，返回: ${JSON.stringify(result || 'null')}`);
       
       // 操作后查询验证
-      // const verifyResult = await adapter.query('movies', 'SELECT * FROM movies');
-      // setTestDataResult(verifyResult);
-      // addLog('info', `✅ 批量操作验证：当前数据共 ${verifyResult?.length || 0} 条`);
+      const verifyResult = await adapter.query('SELECT * FROM movies');
+      setTestDataResult(verifyResult);
+      addLog('info', `✅ 批量操作验证：当前数据共 ${verifyResult?.length || 0} 条`);
     } catch (error) {
       addLog('error', `❌ batch 调用失败: ${error.message}`);
     } finally {
@@ -392,9 +365,9 @@ const WatermelonDBSimplejsiTure = () => {
       addLog('success', `✅ setLocal 调用成功，返回: ${JSON.stringify(result || 'null')}`);
       
       // 验证存储结果
-      // const getResult = adapter.getLocal(localKey);
-      // setTestDataResult([{ localKey, localValue: getResult }]);
-      // addLog('info', `✅ 本地存储验证：读取到 ${localKey} = ${getResult}`);
+      const getResult = adapter.getLocal(localKey);
+      setTestDataResult([{ localKey, localValue: getResult }]);
+      addLog('info', `✅ 本地存储验证：读取到 ${localKey} = ${getResult}`);
     } catch (error) {
       addLog('error', `❌ setLocal 调用失败: ${error.message}`);
     } finally {
@@ -402,7 +375,7 @@ const WatermelonDBSimplejsiTure = () => {
     }
   }, [checkAdapter, adapter, localKey, localValue, addLog]);
 
-  // 其他接口测试函数（保留原有逻辑，仅增强错误处理）
+  // 其他接口测试函数
   const testSetUpWithMigrations = useCallback(async () => {
     if (!checkAdapter()) return;
     setLoading(true);
@@ -427,7 +400,7 @@ const WatermelonDBSimplejsiTure = () => {
     setLoading(true);
     try {
       addLog('info', `🔧 调用 queryAsArray 方法，参数：table=${tableName}, sql=${sql}`);
-      const result = adapter.queryAsArray(tableName, sql);
+      const result = adapter.queryAsArray(tableName, setSqlArray);
       setTestDataResult(result);
       addLog('success', `✅ queryAsArray 调用成功，返回: ${JSON.stringify(result || 'null')}`);
     } catch (error) {
@@ -437,6 +410,7 @@ const WatermelonDBSimplejsiTure = () => {
     }
   }, [checkAdapter, adapter, tableName, sql, addLog]);
 
+  // 返回查询结果的第一列值数组
   const testQueryIds = useCallback(async () => {
     if (!checkAdapter()) return;
     setLoading(true);
@@ -457,7 +431,7 @@ const WatermelonDBSimplejsiTure = () => {
     setLoading(true);
     try {
       addLog('info', `🔧 调用 unsafeQueryRaw 方法，参数：sql=${sql}`);
-      const result = adapter.unsafeQueryRaw(sql);
+      const result = adapter.unsafeQueryRaw('SELECT * FROM movies LIMIT 1');
       setTestDataResult(result);
       addLog('success', `✅ unsafeQueryRaw 调用成功，返回: ${JSON.stringify(result || 'null')}`);
     } catch (error) {
@@ -471,12 +445,18 @@ const WatermelonDBSimplejsiTure = () => {
     if (!checkAdapter()) return;
     setLoading(true);
     try {
-      addLog('info', `🔧 调用 batchJSON 方法，参数：json=${batchJson.substring(0, 50)}...`);
-      const result = adapter.batchJSON(batchJson);
+      const DEFAULT_BATCH_JSON = JSON.stringify([
+        {
+          type: 'INSERT',
+          sql: 'INSERT INTO movies (id, title, year, rating) VALUES (?, ?, ?, ?)',
+          arguments: [findId, 'Inception2', 2011, 8.9]
+        }
+      ]);
+      const result = adapter.batchJSON(DEFAULT_BATCH_JSON);
       addLog('success', `✅ batchJSON 调用成功，返回: ${JSON.stringify(result || 'null')}`);
       
       // 验证结果
-      const verifyResult = await adapter.query('movies', 'SELECT * FROM movies');
+      const verifyResult = await adapter.query('SELECT * FROM movies');
       setTestDataResult(verifyResult);
     } catch (error) {
       addLog('error', `❌ batchJSON 调用失败: ${error.message}`);
@@ -746,7 +726,7 @@ const WatermelonDBSimplejsiTure = () => {
               onPress={initTestDatabase}
               disabled={loading}
             >
-              <Text style={styles.btnText}>初始化测试数据库</Text>
+              <Text style={styles.btnText}>初始化数据库</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -908,11 +888,39 @@ const WatermelonDBSimplejsiTure = () => {
                 loading && styles.btnDisabled,
                 pressed && !loading && styles.btnPressed
               ]} 
+              onPress={testBatchJSON} 
+              disabled={loading}
+            >
+              <Text style={styles.btnText}>batchJSON</Text>
+            </Pressable>
+            <Pressable 
+              style={({ pressed }) => [
+                styles.btn, 
+                styles.btnCommon, 
+                styles.smallBtn, 
+                loading && styles.btnDisabled,
+                pressed && !loading && styles.btnPressed
+              ]} 
+              onPress={testSetUpWithMigrations} 
+              disabled={loading}
+            >
+              <Text style={styles.btnText}>setUpWithMigration</Text>
+            </Pressable>
+          </View>
+          <View style={styles.btnGroup}>
+            {/* <Pressable 
+              style={({ pressed }) => [
+                styles.btn, 
+                styles.btnCommon, 
+                styles.smallBtn, 
+                loading && styles.btnDisabled,
+                pressed && !loading && styles.btnPressed
+              ]} 
               onPress={testBatch} 
               disabled={loading}
             >
               <Text style={styles.btnText}>batch</Text>
-            </Pressable>
+            </Pressable> */}
             <Pressable 
               style={({ pressed }) => [
                 styles.btn, 
@@ -949,6 +957,21 @@ const WatermelonDBSimplejsiTure = () => {
                 loading && styles.btnDisabled,
                 pressed && !loading && styles.btnPressed
               ]} 
+              onPress={testRemoveLocal} 
+              disabled={loading}
+            >
+              <Text style={styles.btnText}>RemoveLocal</Text>
+            </Pressable>
+          </View>
+          <View style={styles.btnGroup}>
+            <Pressable 
+              style={({ pressed }) => [
+                styles.btn, 
+                styles.btnCommon, 
+                styles.smallBtn, 
+                loading && styles.btnDisabled,
+                pressed && !loading && styles.btnPressed
+              ]} 
               onPress={testQueryIds} 
               disabled={loading}
             >
@@ -962,10 +985,38 @@ const WatermelonDBSimplejsiTure = () => {
                 loading && styles.btnDisabled,
                 pressed && !loading && styles.btnPressed
               ]} 
+              onPress={testQueryAsArray} 
+              disabled={loading}
+            >
+              <Text style={styles.btnText}>QueryAsArray</Text>
+            </Pressable>
+          </View>
+          <View style={styles.btnGroup}>
+            <Pressable 
+              style={({ pressed }) => [
+                styles.btn, 
+                styles.btnCommon, 
+                styles.smallBtn, 
+                loading && styles.btnDisabled,
+                pressed && !loading && styles.btnPressed
+              ]} 
               onPress={testUnsafeQueryRaw} 
               disabled={loading}
             >
               <Text style={styles.btnText}>UnsafeQueryRaw</Text>
+            </Pressable>
+            <Pressable 
+              style={({ pressed }) => [
+                styles.btn, 
+                styles.btnCommon, 
+                styles.smallBtn, 
+                loading && styles.btnDisabled,
+                pressed && !loading && styles.btnPressed
+              ]} 
+              onPress={testUnsafeResetDatabase} 
+              disabled={loading}
+            >
+              <Text style={styles.btnText}>unsafeReset</Text>
             </Pressable>
           </View>
         </View>

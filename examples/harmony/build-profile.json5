@@ -1,53 +1,53 @@
 {
-  "app": {
-    "products": [
+  app: {
+    products: [
       {
         name: 'default',
         signingConfig: 'default',
         compatibleSdkVersion: '5.0.0(12)',
-        runtimeOS: 'HarmonyOS'
+        runtimeOS: 'HarmonyOS',
       },
     ],
-    "buildModeSet": [
+    buildModeSet: [
       {
-        "name": 'debug',
+        name: 'debug',
       },
       {
-        "name": 'release',
+        name: 'release',
       },
     ],
-    "signingConfigs": [
+    signingConfigs: [
       {
-        "name": "default",
-        "type": "HarmonyOS",
-        "material": {
-          "certpath": "C:\\Users\\Administrator\\.ohos\\config\\default_harmony_NA09ncFpjGLq64DxlIHtepJVv45nuxiV0dpJeMJ4E5w=.cer",
-          "keyAlias": "debugKey",
-          "keyPassword": "0000001B81AEABD8935C556629325F4C69379DA99F29B97129DD81A10E7163E0F37B95B5E5BC9E51C366EA",
-          "profile": "C:\\Users\\Administrator\\.ohos\\config\\default_harmony_NA09ncFpjGLq64DxlIHtepJVv45nuxiV0dpJeMJ4E5w=.p7b",
-          "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\Administrator\\.ohos\\config\\default_harmony_NA09ncFpjGLq64DxlIHtepJVv45nuxiV0dpJeMJ4E5w=.p12",
-          "storePassword": "0000001BF9DFDF7FD49F515FB35B3077B914A0F1D5AB45B504E331B3DA3566955B2D0D7521ABDF84012B27"
-        }
-      }
-    ]
+        name: 'default',
+        type: 'HarmonyOS',
+        material: {
+          certpath: 'C:\\Users\\Administrator\\.ohos\\config\\default_harmony_NA09ncFpjGLq64DxlIHtepJVv45nuxiV0dpJeMJ4E5w=.cer',
+          keyAlias: 'debugKey',
+          keyPassword: '0000001B81AEABD8935C556629325F4C69379DA99F29B97129DD81A10E7163E0F37B95B5E5BC9E51C366EA',
+          profile: 'C:\\Users\\Administrator\\.ohos\\config\\default_harmony_NA09ncFpjGLq64DxlIHtepJVv45nuxiV0dpJeMJ4E5w=.p7b',
+          signAlg: 'SHA256withECDSA',
+          storeFile: 'C:\\Users\\Administrator\\.ohos\\config\\default_harmony_NA09ncFpjGLq64DxlIHtepJVv45nuxiV0dpJeMJ4E5w=.p12',
+          storePassword: '0000001BF9DFDF7FD49F515FB35B3077B914A0F1D5AB45B504E331B3DA3566955B2D0D7521ABDF84012B27',
+        },
+      },
+    ],
   },
-  "modules": [
+  modules: [
     {
-      "name": 'entry',
-      "srcPath": './entry',
-      "targets": [
+      name: 'entry',
+      srcPath: './entry',
+      targets: [
         {
-          "name": 'default',
-          "applyToProducts": [
-            'default'
+          name: 'default',
+          applyToProducts: [
+            'default',
           ],
         },
       ],
     },
     {
-      "name": "watermelondb",
-      "srcPath": '../../harmony/watermelondb'
-    }
+      name: 'watermelondb',
+      srcPath: '../../harmony/watermelondb',
+    },
   ],
 }

@@ -15,6 +15,7 @@
 #include <database/udmf/udmf.h>
 #include <database/rdb/oh_rdb_transaction.h>
 #include <database/data/oh_data_values.h>
+#include <nlohmann/json.hpp>
 
 using namespace rnoh;
 using namespace facebook;
@@ -718,16 +719,15 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                 3,
                 [](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value
                 {
-                    if (count < 3)
+                    if (count < 1)
                     {
-                        throw jsi::JSError(rt, "query requires 3 arguments");
+                        throw jsi::JSError(rt, "query requires 1 argument");
                     }
 
-                    std::string tableName = args[0].getString(rt).utf8(rt);
-                    std::string sql = args[1].getString(rt).utf8(rt);
-                    jsi::Array arguments = args[2].getObject(rt).getArray(rt);
+                    // std::string tableName = args[0].getString(rt).utf8(rt);
+                    std::string sql = args[0].getString(rt).utf8(rt);
 
-                    DLOG(ERROR) << "123456789 query调用 - 表: " << tableName << ", SQL: " << sql;
+                    // DLOG(ERROR) << "123456789 query调用 - 表: " << tableName << ", SQL: " << sql;
 
                     try
                     {
@@ -740,17 +740,19 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                         }
 
                         // 构建完整的SQL查询语句
-                        std::string fullSql = "SELECT * FROM " + tableName + " WHERE " + sql;
-
+                        // std::string fullSql = "SELECT * FROM " + tableName + " WHERE " + sql;
+                        std::string fullSql = sql;
+                        DLOG(ERROR) << "123456789 query调用 - 完整SQL: " << fullSql;
                         // 执行查询
                         OH_Cursor *cursor = OH_Rdb_ExecuteQueryV2(globalStore, fullSql.c_str(), nullptr);
+                        DLOG(ERROR) << "123456789 query调用 - 结果: " << cursor;
                         if (cursor == nullptr)
                         {
                             throw jsi::JSError(rt, "Failed to execute query: " + fullSql);
                         }
 
                         // 处理查询结果
-                        jsi::Array resultArray = jsi::Array(rt, 0);
+                        std::vector<jsi::Value> resultRows;
                         int rowIndex = 0;
 
                         // 遍历结果集
@@ -769,8 +771,8 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                             for (int i = 0; i < columnCount; i++)
                             {
                                 // 获取列名
-                                char *columnName = nullptr;
-                                if (cursor->getColumnName(cursor, i, columnName, sizeof(columnName)) == RDB_OK && columnName != nullptr)
+                                char columnName[256] = {0};
+                                if (cursor->getColumnName(cursor, i, columnName, sizeof(columnName)) == RDB_OK)
                                 {
                                     OH_ColumnType columnType;
                                     jsi::Value cellValue = jsi::Value::null();
@@ -800,11 +802,10 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                         }
                                         case TYPE_TEXT:
                                         {
-                                            char *textValue = nullptr;
-                                            int textLength = 0;
-                                            if (cursor->getText(cursor, i, textValue, textLength) == RDB_OK)
+                                            char textValue[1024] = {0};
+                                            if (cursor->getText(cursor, i, textValue, sizeof(textValue)) == RDB_OK)
                                             {
-                                                if (textValue != nullptr)
+                                                if (strlen(textValue) > 0)
                                                 {
                                                     cellValue = jsi::String::createFromUtf8(rt, textValue);
                                                 }
@@ -832,8 +833,16 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                 }
                             }
 
-                            resultArray.setValueAtIndex(rt, rowIndex, rowObject);
+                            // resultArray.setValueAtIndex(rt, rowIndex, rowObject);
+                            resultRows.push_back(std::move(rowObject));
                             rowIndex++;
+                        }
+
+                        // 创建最终结果数组
+                        jsi::Array resultArray = jsi::Array(rt, resultRows.size());
+                        for (size_t i = 0; i < resultRows.size(); i++)
+                        {
+                            resultArray.setValueAtIndex(rt, i, resultRows[i]);
                         }
 
                         // 清理游标
@@ -852,17 +861,16 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
             auto queryAsArrayFunc = jsi::Function::createFromHostFunction(
                 rt,
                 jsi::PropNameID::forAscii(rt, "queryAsArray"),
-                3,
+                2,
                 [](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value
                 {
-                    if (count < 3)
+                    if (count < 2)
                     {
-                        throw jsi::JSError(rt, "queryAsArray requires 3 arguments");
+                        throw jsi::JSError(rt, "queryAsArray requires 2 arguments");
                     }
 
                     std::string tableName = args[0].getString(rt).utf8(rt);
                     std::string sql = args[1].getString(rt).utf8(rt);
-                    jsi::Array arguments = args[2].getObject(rt).getArray(rt);
 
                     DLOG(ERROR) << "123456789 queryAsArray调用 - 表: " << tableName;
 
@@ -1030,7 +1038,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                             if (cursor->getColumnType(cursor, 0, &columnType) == RDB_OK)
                             {
                                 jsi::Value jsValue;
-
                                 switch (columnType)
                                 {
                                 case TYPE_INT64:
@@ -1055,8 +1062,8 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                 }
                                 case TYPE_TEXT:
                                 {
-                                    char *textValue = nullptr;
-                                    int textLength = 0;
+                                    char textValue[1024] = {0};
+                                    size_t textLength = sizeof(textValue);
                                     if (cursor->getText(cursor, 0, textValue, textLength) == RDB_OK)
                                     {
                                         if (textValue != nullptr)
@@ -1105,16 +1112,15 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
             auto unsafeQueryRawFunc = jsi::Function::createFromHostFunction(
                 rt,
                 jsi::PropNameID::forAscii(rt, "unsafeQueryRaw"),
-                2,
+                1,
                 [](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value
                 {
-                    if (count < 2)
+                    if (count < 1)
                     {
-                        throw jsi::JSError(rt, "unsafeQueryRaw requires 2 arguments");
+                        throw jsi::JSError(rt, "unsafeQueryRaw requires 1 argument");
                     }
 
                     std::string sql = args[0].getString(rt).utf8(rt);
-                    jsi::Array arguments = args[1].getObject(rt).getArray(rt);
 
                     DLOG(ERROR) << "123456789 unsafeQueryRaw调用 - SQL: " << sql;
 
@@ -1147,9 +1153,8 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                             }
 
                             // 处理查询结果
-                            jsi::Array resultArray = jsi::Array(rt, 0);
                             int rowIndex = 0;
-
+                            std::vector<jsi::Object> results;
                             while (cursor->goToNextRow(cursor) == RDB_OK)
                             {
                                 int columnCount = 0;
@@ -1170,6 +1175,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
 
                                         if (cursor->getColumnType(cursor, i, &columnType) == RDB_OK)
                                         {
+                                        
                                             switch (columnType)
                                             {
                                             case 1: // TYPE_INT64
@@ -1181,13 +1187,21 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                                 }
                                                 break;
                                             }
-                                            case 2: // TYPE_TEXT
+                                            case 3: // TYPE_TEXT
                                             {
-                                                char *textValue;
-                                                int textLength = 0;
-                                                if (cursor->getText(cursor, i, textValue, textLength) == RDB_OK)
+                                                char textValue[1024] = {0};
+                                                if (cursor->getText(cursor, i, textValue, sizeof(textValue)) == RDB_OK)
                                                 {
                                                     cellValue = jsi::String::createFromUtf8(rt, textValue);
+                                                }
+                                                break;
+                                            }
+                                            case 2: // TYPE_FLOAT
+                                            {
+                                                double doubleValue;
+                                                if (cursor->getReal(cursor, i, &doubleValue) == RDB_OK)
+                                                {
+                                                    cellValue = jsi::Value(doubleValue);
                                                 }
                                                 break;
                                             }
@@ -1209,8 +1223,14 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                     }
                                 }
 
-                                resultArray.setValueAtIndex(rt, rowIndex, rowObject);
+                                results.push_back(std::move(rowObject));
                                 rowIndex++;
+                            }
+
+                            jsi::Array resultArray = jsi::Array(rt, results.size());
+                            for (size_t i = 0; i < results.size(); i++)
+                            {
+                                resultArray.setValueAtIndex(rt, i, results[i]);
                             }
 
                             if (cursor != nullptr)
@@ -1248,13 +1268,12 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                 2,
                 [](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value
                 {
-                    if (count < 2)
+                    if (count < 1)
                     {
-                        throw jsi::JSError(rt, "count requires 2 arguments");
+                        throw jsi::JSError(rt, "count requires 1 argument");
                     }
 
                     std::string sql = args[0].getString(rt).utf8(rt);
-                    //jsi::Array arguments = args[1].getObject(rt).getArray(rt);
 
                     DLOG(ERROR) << "123456789 count调用 - SQL: " << sql;
 
@@ -1320,6 +1339,8 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                     jsi::Array operations = args[0].getObject(rt).getArray(rt);
 
                     DLOG(ERROR) << "123456789 batch调用 - 操作数量: " << operations.size(rt);
+                    jsi::Array results(rt, operations.size(rt));
+                    size_t index = 0;
 
                     try
                     {
@@ -1332,27 +1353,82 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                         }
 
                         // 开始事务
-                        OH_Rdb_BeginTransaction(globalStore);
+                        int beginResult = OH_Rdb_BeginTransaction(globalStore);
+                        if (beginResult != RDB_OK)
+                        {
+                            throw jsi::JSError(rt, "Failed to begin transaction, error code: " + std::to_string(beginResult));
+                        }
 
                         // 执行批量操作
                         for (size_t i = 0; i < operations.size(rt); i++)
                         {
+                            DLOG(ERROR) << "123456789 batch调用 - 1111: " << i;
                             jsi::Value operationValue = operations.getValueAtIndex(rt, i);
                             if (operationValue.isObject())
                             {
                                 jsi::Object operation = operationValue.getObject(rt);
                                 std::string type = operation.getProperty(rt, "type").getString(rt).utf8(rt);
-
-                                if (type == "execute")
+                                DLOG(ERROR) << "123456789 batch调用 - 当前操作索引: " << type;
+                                std::string sql = operation.getProperty(rt, "sql").getString(rt).utf8(rt);
+                                DLOG(ERROR) << "123456789 batch调用 - 当前操作SQL: " << sql;
+                                jsi::Array jsArguments = operation.getProperty(rt, "arguments").getObject(rt).getArray(rt);
+                                for (size_t j = 0; j < jsArguments.size(rt); j++)
                                 {
-                                    std::string sql = operation.getProperty(rt, "sql").getString(rt).utf8(rt);
-                                    jsi::Array params = operation.getProperty(rt, "args").getObject(rt).getArray(rt);
+                                    jsi::Value jsArgument = jsArguments.getValueAtIndex(rt, j);
+                                    if (jsArgument.isString())
+                                    {
+                                        std::string arg = jsArgument.getString(rt).utf8(rt);
+                                        sql.replace(sql.find("?"), 1, "'" + arg + "'");
+                                    }
+                                    else if (jsArgument.isNumber())
+                                    {
+                                        double arg = jsArgument.getNumber();
+                                        sql.replace(sql.find("?"), 1, std::to_string(arg));
+                                    }
+
+                                    else if (jsArgument.isNull())
+                                    {
+                                        sql.replace(sql.find("?"), 1, "NULL");
+                                    }
+                                    else
+                                    {
+                                        throw jsi::JSError(rt, "Unsupported argument type in batch operation.");
+                                    }
+                                }
+
+                                DLOG(ERROR) << "123456789 batch调用 - 最终操作SQL: " << sql;
+
+                                if (type == "INSERT")
+                                {
+                                    // std::string checksql = "SELECT EXISTS(SELECT 1 FROM movies WHERE id = ?)";
+                                    // if (jsArguments.size(rt) > 0)
+                                    // {
+                                    //     jsi::Value firstArg = jsArguments.getValueAtIndex(rt, 0);
+                                    //     if (firstArg.isString())
+                                    //     {
+                                    //         std::string arg = firstArg.getString(rt).utf8(rt);
+                                    //         checksql.replace(checksql.find("?"), 1, "'" + arg + "'");
+                                    //     }
+                                    //     else if (firstArg.isNumber())
+                                    //     {
+                                    //         int64_t arg = firstArg.getNumber();
+                                    //         checksql.replace(checksql.find("?"), 1, std::to_string(arg));
+                                    //     }
+                                    // }
+                                    // DLOG(ERROR) << "123456789 INSERTchecksql是: " << checksql;
+                                    // OH_Cursor *checkcursor = OH_Rdb_ExecuteQueryV2(globalStore, checksql.c_str(), nullptr);
+                                    // if (checkcursor != nullptr && checkcursor->goToNextRow(checkcursor) == RDB_OK)
+                                    // {
+                                    //     DLOG(ERROR) << "123456789 INSERT失败 - ID已存在，sql: " << checksql;
+                                    //     throw jsi::JSError(rt, "This ID already exists. Please use a different ID.");
+                                    // }
 
                                     DLOG(ERROR) << "123456789 批量执行: " << sql;
-
                                     int execResult = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
+                                    DLOG(ERROR) << "123456789 执行INSERT操作, 结果: " << execResult;
                                     if (execResult != RDB_OK)
                                     {
+
                                         int rollbackResult = OH_Rdb_ExecuteV2(globalStore, "ROLLBACK", nullptr, nullptr);
                                         if (rollbackResult != RDB_OK)
                                         {
@@ -1361,14 +1437,32 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
 
                                         throw jsi::JSError(rt, "Execute failed for SQL: " + sql);
                                     }
+                                    else
+                                    {
+                                        DLOG(ERROR) << "123456789 插入成功 sql: " << sql;
+                                    }
+                                }
+                                else
+                                {
+                                    DLOG(ERROR) << "123456789 批量执行: " << sql;
+                                    int execResult = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
+                                    if (execResult != RDB_OK)
+                                    {
+                                        int rollbackResult = OH_Rdb_ExecuteV2(globalStore, "ROLLBACK", nullptr, nullptr);
+                                        if (rollbackResult != RDB_OK)
+                                        {
+                                            DLOG(ERROR) << "123456789 回滚事务失败";
+                                        }
+                                        throw jsi::JSError(rt, "Execute failed for SQL: " + sql);
+                                    }
                                 }
                             }
                         }
-
+                        DLOG(ERROR) << "123456789 batch调用 - 执行完成";
                         // 提交事务
                         OH_Rdb_Commit(globalStore);
 
-                        return jsi::Value::undefined();
+                        return results;
                     }
                     catch (const std::exception &e)
                     {
@@ -1411,169 +1505,140 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
 
                         bool success = true;
                         std::string errorMessage;
+                        // jsi::Array results(rt, 0);
+                        size_t index = 0;
 
-                        try
+                        // 简单的JSON解析实现
+                        if (operationsJson.empty() || operationsJson[0] != '[' || operationsJson[operationsJson.length() - 1] != ']')
                         {
-                            // 简单的JSON解析实现
-                            // 期望的JSON格式: [{"type":"execute","sql":"SQL语句","args":["参数1","参数2"]}]
+                            throw std::runtime_error("Invalid JSON format - expected array");
+                        }
+                        auto jsonArray = nlohmann::json::parse(operationsJson);
+                        jsi::Array results(rt, jsonArray.size());
 
-                            // 检查是否是数组格式
-                            if (operationsJson.empty() || operationsJson[0] != '[' || operationsJson[operationsJson.length() - 1] != ']')
+                        for (const auto &operationObj : jsonArray)
+                        {
+                            // 解析的操作对象
+                            if (!operationObj.is_object())
                             {
-                                throw std::runtime_error("Invalid JSON format - expected array");
+                                throw std::runtime_error("Invalid JSON format - expected object");
                             }
 
-                            // 移除方括号
-                            std::string innerJson = operationsJson.substr(1, operationsJson.length() - 2);
-
-                            // 分割操作对象
-                            std::vector<std::string> operations;
-                            size_t start = 0;
-                            size_t braceCount = 0;
-                            bool inQuotes = false;
-
-                            for (size_t i = 0; i < innerJson.length(); i++)
+                            // 提取type和sql字段
+                            if (!operationObj.contains("type") || !operationObj.contains("sql"))
                             {
-                                char c = innerJson[i];
-                                if (c == '\"' && (i == 0 || innerJson[i - 1] != '\\'))
-                                {
-                                    inQuotes = !inQuotes;
-                                }
-                                else if (!inQuotes)
-                                {
-                                    if (c == '{')
-                                        braceCount++;
-                                    else if (c == '}')
-                                        braceCount--;
-
-                                    if (c == ',' && braceCount == 0)
-                                    {
-                                        operations.push_back(innerJson.substr(start, i - start));
-                                        start = i + 1;
-                                    }
-                                }
+                                throw std::runtime_error("Invalid JSON format - missing 'type' or 'sql' field");
                             }
-
-                            if (start < innerJson.length())
+                            std::string type = operationObj["type"];
+                            std::string sql = operationObj["sql"];
+                            DLOG(ERROR) << "123456789 batchJSON调用 - 操作类型: " << type << ", SQL: " << sql;
+                            // 提取参数数组 (arguments)
+                            auto argumentsArray = operationObj["arguments"];
+                            DLOG(ERROR) << "123456789 batchJSON调用 - 参数数量: " << argumentsArray.size();
+                            std::vector<std::string> arguments; // 用于存储参数值
+                            for (size_t i = 0; i < argumentsArray.size(); ++i)
                             {
-                                operations.push_back(innerJson.substr(start));
-                            }
-
-                            // 执行每个操作
-                            for (const auto &operationStr : operations)
-                            {
-                                if (operationStr.empty())
-                                    continue;
-
-                                // 解析操作对象
-                                std::string type;
-                                std::string sql;
-                                std::vector<std::string> args;
-
-                                // 查找type字段
-                                size_t typePos = operationStr.find("\"type\":");
-                                if (typePos != std::string::npos)
+                                // 根据参数的实际类型进行处理
+                                if (argumentsArray[i].is_string())
                                 {
-                                    size_t startQuote = operationStr.find('\"', typePos + 7);
-                                    size_t endQuote = operationStr.find('\"', startQuote + 1);
-                                    if (startQuote != std::string::npos && endQuote != std::string::npos)
-                                    {
-                                        type = operationStr.substr(startQuote + 1, endQuote - startQuote - 1);
-                                    }
+                                    std::string arg = argumentsArray[i].get<std::string>();
+                                    arguments.push_back(arg);
+                                    sql.replace(sql.find("?"), 1, "'" + arguments.back() + "'");
                                 }
-
-                                // 查找sql字段
-                                size_t sqlPos = operationStr.find("\"sql\":");
-                                if (sqlPos != std::string::npos)
+                                // 整数类型处理
+                                else if (argumentsArray[i].is_number_integer())
                                 {
-                                    size_t startQuote = operationStr.find('\"', sqlPos + 6);
-                                    size_t endQuote = operationStr.find('\"', startQuote + 1);
-                                    if (startQuote != std::string::npos && endQuote != std::string::npos)
-                                    {
-                                        sql = operationStr.substr(startQuote + 1, endQuote - startQuote - 1);
-                                    }
+                                    int64_t arg = argumentsArray[i].get<int64_t>();
+                                    arguments.push_back(std::to_string(arg));
+                                    sql.replace(sql.find("?"), 1, arguments.back());
                                 }
-
-                                // 新增：解析args参数数组
-                                size_t argsPos = operationStr.find("\"args\":");
-                                if (argsPos != std::string::npos)
+                                // 浮点数类型处理
+                                else if (argumentsArray[i].is_number_float())
                                 {
-                                    // 查找args数组的开始位置
-                                    size_t arrayStart = operationStr.find('[', argsPos + 6);
-                                    if (arrayStart != std::string::npos)
-                                    {
-                                        size_t arrayEnd = operationStr.find(']', arrayStart + 1);
-                                        if (arrayEnd != std::string::npos)
-                                        {
-                                            std::string argsArray = operationStr.substr(arrayStart + 1, arrayEnd - arrayStart - 1);
-
-                                            // 分割参数数组
-                                            size_t paramStart = 0;
-                                            bool inQuotes = false;
-                                            for (size_t i = 0; i < argsArray.length(); i++)
-                                            {
-                                                char c = argsArray[i];
-                                                if (c == '\"' && (i == 0 || argsArray[i - 1] != '\\'))
-                                                {
-                                                    inQuotes = !inQuotes;
-                                                }
-                                                else if (!inQuotes && c == ',')
-                                                {
-                                                    std::string param = argsArray.substr(paramStart, i - paramStart);
-                                                    // 移除引号
-                                                    if (param.length() >= 2 && param[0] == '\"' && param[param.length() - 1] == '\"')
-                                                    {
-                                                        param = param.substr(1, param.length() - 2);
-                                                    }
-                                                    args.push_back(param);
-                                                    paramStart = i + 1;
-                                                }
-                                            }
-
-                                            // 处理最后一个参数
-                                            if (paramStart < argsArray.length())
-                                            {
-                                                std::string param = argsArray.substr(paramStart);
-                                                if (param.length() >= 2 && param[0] == '\"' && param[param.length() - 1] == '\"')
-                                                {
-                                                    param = param.substr(1, param.length() - 2);
-                                                }
-                                                args.push_back(param);
-                                            }
-                                        }
-                                    }
+                                    double arg = argumentsArray[i].get<double>();
+                                    arguments.push_back(std::to_string(arg));
+                                    sql.replace(sql.find("?"), 1, arguments.back());
                                 }
-
-                                DLOG(ERROR) << "123456789 解析操作 - type: " << type << ", sql: " << sql << ", args数量: " << args.size();
-
-                                if (type == "execute" && !sql.empty())
+                                // 布尔类型处理
+                                else if (argumentsArray[i].is_boolean())
                                 {
-
-                                    int execResult = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
-                                    if (execResult != RDB_OK)
-                                    {
-                                        success = false;
-                                        errorMessage = "Execute failed for SQL: " + sql + ", error code: " + std::to_string(execResult);
-                                        break;
-                                    }
-                                    DLOG(ERROR) << "123456789 SQL执行成功: " << sql;
+                                    bool arg = argumentsArray[i].get<bool>();
+                                    arguments.push_back(arg ? "1" : "0");
+                                    sql.replace(sql.find("?"), 1, arguments.back());
+                                }
+                                // NULL值处理
+                                else if (argumentsArray[i].is_null())
+                                {
+                                    arguments.push_back("NULL");
+                                    sql.replace(sql.find("?"), 1, arguments.back());
                                 }
                                 else
                                 {
-                                    DLOG(ERROR) << "123456789 跳过不支持的操作类型: " << type;
+                                    throw std::runtime_error("Invalid JSON format - unsupported argument type");
+                                }
+                                DLOG(ERROR) << "123456789 batchJSON调用 - 参数 " << i << ": " << arguments.back();
+                            }
+                            DLOG(ERROR) << "123456789 batchJSON最终调用 - sql命令 : " << sql;
+
+                            if (type == "INSERT" && !sql.empty())
+                            {
+                                // std::string checksql = "SELECT EXISTS(SELECT 1 FROM movies WHERE id = ?)";
+                                // if (argumentsArray.size() > 0)
+                                // {
+                                //     if (argumentsArray[0].is_string())
+                                //     {
+                                //         std::string arg = argumentsArray[0].get<std::string>();
+                                //         arguments.push_back(arg);
+                                //         checksql.replace(checksql.find("?"), 1, "'" + arguments.back() + "'");
+                                //     }
+                                //     else if (argumentsArray[0].is_number_integer())
+                                //     {
+                                //         int64_t arg = argumentsArray[0].get<int64_t>();
+                                //         arguments.push_back(std::to_string(arg));
+                                //         checksql.replace(checksql.find("?"), 1, arguments.back());
+                                //     }
+                                //     else if (argumentsArray[0].is_number_float())
+                                //     {
+                                //         double arg = argumentsArray[0].get<double>();
+                                //         arguments.push_back(std::to_string(arg));
+                                //         checksql.replace(checksql.find("?"), 1, arguments.back());
+                                //     }
+                                // }
+                                // DLOG(ERROR) << "123456789 INSERTchecksql是: " << checksql;
+                                // OH_Cursor *checkcursor = OH_Rdb_ExecuteQueryV2(globalStore, checksql.c_str(), nullptr);
+                                // if (checkcursor != nullptr && checkcursor->goToNextRow(checkcursor) == RDB_OK)
+                                // {
+                                //     DLOG(ERROR) << "123456789 INSERT失败 - ID已存在: " << arguments.back();
+                                //     throw jsi::JSError(rt, "This ID already exists. Please use a different ID.");
+                                // }
+
+                                int execResult = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
+                                if (execResult == RDB_OK)
+                                {
+                                    DLOG(ERROR) << "123456789 SQL插入执行成功: " << sql;
+                                }
+                                else
+                                {
+                                    success = false;
+                                    DLOG(ERROR) << "123456789 SQL插入执行失败: " << sql;
                                 }
                             }
-                        }
-                        catch (const std::exception &e)
-                        {
-                            success = false;
-                            errorMessage = e.what();
+                            else
+                            {
+                                int execResult = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
+                                if (execResult != RDB_OK)
+                                {
+                                    success = false;
+                                    DLOG(ERROR) << "123456789 SQL执行失败: " << sql;
+                                }
+                            }
                         }
 
                         // 根据执行结果提交或回滚事务
                         if (success)
                         {
-                            int commitResult = OH_Rdb_ExecuteV2(globalStore, "COMMIT", nullptr, nullptr);
+                            int commitResult = OH_Rdb_Commit(globalStore);
+                            DLOG(ERROR) << "123456789 :到这里的 " << commitResult;
                             if (commitResult != RDB_OK)
                             {
                                 OH_Rdb_ExecuteV2(globalStore, "ROLLBACK", nullptr, nullptr);
@@ -1591,7 +1656,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                             throw jsi::JSError(rt, "batchJSON failed: " + errorMessage);
                         }
 
-                        return jsi::Value::undefined();
+                        return results;
                     }
                     catch (const std::exception &e)
                     {
@@ -1627,14 +1692,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                             throw jsi::JSError(rt, "Database not initialized. Call initialize() first.");
                         }
 
-                        // 确保local_storage表存在
-                        std::string createTableSql = "CREATE TABLE IF NOT EXISTS local_storage (key TEXT PRIMARY KEY, value TEXT)";
-                        int createResult = OH_Rdb_ExecuteV2(globalStore, createTableSql.c_str(), nullptr, nullptr);
-                        if (createResult != RDB_OK)
-                        {
-                            DLOG(ERROR) << "123456789 创建local_storage表失败: " << createResult;
-                        }
-
                         // 使用字符串拼接的方式构建SQL（避免复杂的参数化查询）
                         std::string sql = "SELECT value FROM local_storage WHERE key = '" + key + "'";
 
@@ -1652,6 +1709,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                         {
                             rowCount = 0;
                         }
+                        DLOG(ERROR) << "123456789查询行数: " << rowCount;
 
                         if (rowCount <= 0)
                         {
@@ -1662,6 +1720,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
 
                         // 移动到第一行
                         int moveResult = cursor->goToNextRow(cursor);
+                        DLOG(ERROR) << "123456789 goToNextRow结果: " << moveResult;
                         if (moveResult != RDB_OK)
                         {
                             cursor->destroy(cursor);
@@ -1670,9 +1729,10 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                         }
 
                         // 获取值
-                        char *value = nullptr;
-                        int textLength = 0;
+                        char value[1024];
+                        int textLength = sizeof(value);
                         int getResult = cursor->getText(cursor, 0, value, textLength);
+                        DLOG(ERROR) << "123456789 getText结果: " << getResult << ", 获取的值: " << (value ? value : "NULL");
                         if (getResult != RDB_OK || value == nullptr)
                         {
                             cursor->destroy(cursor);
@@ -1684,10 +1744,12 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                         cursor->destroy(cursor);
 
                         DLOG(ERROR) << "123456789 getLocal完成 - 键: " << key << ", 值: " << resultValue;
+
                         return jsi::String::createFromUtf8(rt, resultValue);
                     }
                     catch (const std::exception &e)
                     {
+
                         throw jsi::JSError(rt, "getLocal failed: " + std::string(e.what()));
                     }
                 });
@@ -2007,13 +2069,20 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                             throw jsi::JSError(rt, "Database not initialized. Call initialize() first.");
                         }
 
+                        // 确保local_storage表存在
+                        std::string createTableSql = "CREATE TABLE IF NOT EXISTS local_storage (key TEXT PRIMARY KEY, value TEXT)";
+                        int createResult = OH_Rdb_ExecuteV2(globalStore, createTableSql.c_str(), nullptr, nullptr);
+                        if (createResult != RDB_OK)
+                        {
+                            DLOG(ERROR) << "123456789 创建local_storage表失败: " << createResult;
+                        }
+
                         // 插入或更新local_storage表
                         std::string sql = "INSERT OR REPLACE INTO local_storage (key, value) VALUES ('" + key + "', '" + value + "')";
                         int execResult = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
 
                         if (execResult != RDB_OK)
                         {
-
                             throw jsi::JSError(rt, "setLocal failed with error code: " + std::to_string(execResult));
                         }
 
@@ -2052,13 +2121,20 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                             throw jsi::JSError(rt, "Database not initialized. Call initialize() first.");
                         }
 
+                        // 确保local_storage表存在
+                        std::string createTableSql = "CREATE TABLE IF NOT EXISTS local_storage (key TEXT PRIMARY KEY, value TEXT)";
+                        int createResult = OH_Rdb_ExecuteV2(globalStore, createTableSql.c_str(), nullptr, nullptr);
+                        if (createResult != RDB_OK)
+                        {
+                            DLOG(ERROR) << "123456789 创建local_storage表失败: " << createResult;
+                        }
+
                         // 从local_storage表删除
                         std::string sql = "DELETE FROM local_storage WHERE key = '" + key + "'";
                         int execResult = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
 
                         if (execResult != RDB_OK)
                         {
-
                             throw jsi::JSError(rt, "removeLocal failed with error code: " + std::to_string(execResult));
                         }
 
@@ -2079,7 +2155,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                 [](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value
                 {
                     DLOG(ERROR) << "123456789 unsafeResetDatabase调用 - 数据库重置";
-
                     try
                     {
                         std::lock_guard<std::mutex> lock(storeMutex);
