@@ -196,7 +196,7 @@ const WatermelonDBSimplejsiTure = () => {
       addLog('success', '✅ 单条测试数据插入成功');
       
       // 查询更新后的数据
-      const result = await adapter.query('SELECT * FROM movies LIMIT 1');
+      const result = await adapter.query('SELECT * FROM movies');
       setTestDataResult(result);
     } catch (error) {
       addLog('error', `❌ 插入测试数据失败: ${error.message}`);
@@ -351,8 +351,23 @@ const WatermelonDBSimplejsiTure = () => {
     if (!checkAdapter()) return;
     setLoading(true);
     try {
-      addLog('info', `🔧 调用 batch 方法，参数：operations=${batchJson.substring(0, 50)}...`);
-      const operations = JSON.parse(batchJson);
+      const baseTitle1 = '批量新增1';
+      const baseTitle2 = '批量新增2';
+      const newTitle1 = `${baseTitle1} · v${Math.floor(Math.random() * 10 + 1)}`;
+      const newTitle2 = `${baseTitle2} · v${Math.floor(Math.random() * 10 + 1)}`;
+      const DEFAULT_BATCH_JSON = JSON.stringify([
+        {
+          type: 'INSERT',
+          sql: 'INSERT INTO movies (id, title, year, rating) VALUES (?, ?, ?, ?)',
+          arguments: [newTitle1, 'Inception', 2016, 9.2]
+        },
+        {
+          type: 'INSERT',
+          sql: 'INSERT INTO movies (id, title, year, rating) VALUES (?, ?, ?, ?)',
+          arguments: [newTitle2, 'Interstellar', 2010, 8.8]
+        }
+      ], null, 2);
+      const operations = JSON.parse(DEFAULT_BATCH_JSON);
       const result = adapter.batch(operations);
       addLog('success', `✅ batch 调用成功，返回: ${JSON.stringify(result || 'null')}`);
       
@@ -412,7 +427,7 @@ const WatermelonDBSimplejsiTure = () => {
     setLoading(true);
     try {
       addLog('info', `🔧 调用 queryAsArray 方法，参数：table=${tableName}, sql=${sql}`);
-      const result = adapter.queryAsArray(tableName, setSqlArray);
+      const result = adapter.queryAsArray(tableName, sql);
       setTestDataResult(result);
       addLog('success', `✅ queryAsArray 调用成功，返回: ${JSON.stringify(result || 'null')}`);
     } catch (error) {
@@ -523,7 +538,7 @@ const WatermelonDBSimplejsiTure = () => {
       addLog('success', `✅ unsafeLoadFromSync 调用成功，返回: ${JSON.stringify(result || 'null')}`);
       
       // 验证结果
-      const verifyResult = await adapter.query('movies', 'SELECT * FROM movies');
+      const verifyResult = await adapter.query('SELECT * FROM movies');
       setTestDataResult(verifyResult);
     } catch (error) {
       addLog('error', `❌ unsafeLoadFromSync 调用失败: ${error.message}`);
@@ -758,7 +773,7 @@ const WatermelonDBSimplejsiTure = () => {
 
         {/* 2. 测试数据录入区（新增） */}
         <View style={styles.module}>
-          <Text style={styles.moduleTitle}>2. 测试数据录入</Text>
+          <Text style={styles.moduleTitle}>2. 测试数据录入（batch 增删改）</Text>
           <TextInput
             style={styles.input}
             placeholder="电影ID"
@@ -921,19 +936,6 @@ const WatermelonDBSimplejsiTure = () => {
             </Pressable>
           </View>
           <View style={styles.btnGroup}>
-            {/* <Pressable 
-              style={({ pressed }) => [
-                styles.btn, 
-                styles.btnCommon, 
-                styles.smallBtn, 
-                loading && styles.btnDisabled,
-                pressed && !loading && styles.btnPressed
-              ]} 
-              onPress={testBatch} 
-              disabled={loading}
-            >
-              <Text style={styles.btnText}>batch</Text>
-            </Pressable> */}
             <Pressable 
               style={({ pressed }) => [
                 styles.btn, 
@@ -975,6 +977,19 @@ const WatermelonDBSimplejsiTure = () => {
             >
               <Text style={styles.btnText}>RemoveLocal</Text>
             </Pressable>
+             <Pressable 
+              style={({ pressed }) => [
+                styles.btn, 
+                styles.btnCommon, 
+                styles.smallBtn, 
+                loading && styles.btnDisabled,
+                pressed && !loading && styles.btnPressed
+              ]} 
+              onPress={testBatch} 
+              disabled={loading}
+            >
+              <Text style={styles.btnText}>batch批量</Text>
+            </Pressable>
           </View>
           <View style={styles.btnGroup}>
             <Pressable 
@@ -1002,6 +1017,34 @@ const WatermelonDBSimplejsiTure = () => {
               disabled={loading}
             >
               <Text style={styles.btnText}>QueryAsArray</Text>
+            </Pressable>
+          </View>
+          <View style={styles.btnGroup}>
+            <Pressable 
+              style={({ pressed }) => [
+                styles.btn, 
+                styles.btnCommon, 
+                styles.smallBtn, 
+                loading && styles.btnDisabled,
+                pressed && !loading && styles.btnPressed
+              ]} 
+              onPress={testUnsafeLoadFromSync} 
+              disabled={loading}
+            >
+              <Text style={styles.btnText}>UnsafeLoadFromSync</Text>
+            </Pressable>
+            <Pressable 
+              style={({ pressed }) => [
+                styles.btn, 
+                styles.btnCommon, 
+                styles.smallBtn, 
+                loading && styles.btnDisabled,
+                pressed && !loading && styles.btnPressed
+              ]} 
+              onPress={testUnsafeExecuteMultiple} 
+              disabled={loading}
+            >
+              <Text style={styles.btnText}>UnsafeExecuteMultiple</Text>
             </Pressable>
           </View>
           <View style={styles.btnGroup}>
