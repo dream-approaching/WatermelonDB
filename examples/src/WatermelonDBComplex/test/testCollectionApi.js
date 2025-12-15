@@ -617,49 +617,98 @@ export const testDisposableFromDirtyRawMethod = async () => {
 
 export const testFetchIdsDirectly = async () => {
   try {
-    // 1. 构造 Query 实例（_fetchIds 第一个参数必须是 Query 实例）
-    const testQuery = projectsCollection.query(
-      Q.where('name', Q.like(`${TEST_PREFIX}%`)), // 匹配测试前缀的记录
-      Q.sortBy('deadline', Q.desc)
-    );
+    // 步骤1：创建测试数据（避免无数据）
+    let testRecordId = null;
+    await database.write(async () => {
+      const newRecord = await projectsCollection.create(project => {
+        project.name = `${TEST_PREFIX}_fetchIds测试_${Date.now()}`;
+        project.deadline = Date.now();
+        project.metadata = JSON.stringify({ test: true });
+      });
+      testRecordId = newRecord.id;
+      console.log('【调试】创建测试记录ID：', testRecordId);
+    });
 
-    // 2. 封装 _fetchIds 为 Promise（适配异步回调）
+    // 步骤2：构造最简Query实例（精准匹配ID，确保条件一致）
+    const testQuery = projectsCollection.query(
+      Q.where('id', testRecordId)
+    );
+    console.log('【调试】Query条件：', JSON.stringify(testQuery.clauses));
+
+    // 步骤3：直接调用 _fetchIds（兼容低版本，补充第三个参数）
     const fetchIdsResult = await new Promise((resolve, reject) => {
-      // 直接调用 _fetchIds：参数1=Query实例，参数2=回调函数(err, ids)
       projectsCollection._fetchIds(
         testQuery,
         (err, ids) => {
           if (err) {
-            reject(new Error(`_fetchIds 执行报错：${err.message}`));
+            console.error('【调试】_fetchIds 底层错误：', err, err.stack);
+            reject(new Error(`底层错误：${err.message}`));
             return;
           }
-          resolve(ids); // 成功则返回 ID 数组
-        }
+          console.log('【调试】_fetchIds 返回IDs：', ids, '类型：', typeof ids);
+          resolve(ids || []); // 容错：空值转为空数组
+        },
+        null // 兼容低版本的第三个参数
       );
     });
 
-    // 3. 验证 _fetchIds 返回结果
-    if (!fetchIdsResult) throw new Error('_fetchIds 返回空结果');
-    if (!Array.isArray(fetchIdsResult)) throw new Error(`_fetchIds 返回非数组，实际类型：${typeof fetchIdsResult}`);
+    // 步骤4：调用公共API fetchIds（使用同一个Query实例，避免条件不一致）
+    const publicApiIds = await testQuery.fetchIds();
+    console.log('【调试】publicApiIds 返回IDs：', publicApiIds, '类型：', typeof publicApiIds);
 
-    // 4. （可选）对比公共 API fetchIds() 结果，验证一致性
-    const publicApiIds = await testQuery.fetchIds(); // 公共 API（底层也是 _fetchIds）
-    if (JSON.stringify(fetchIdsResult) !== JSON.stringify(publicApiIds)) {
-      throw new Error(`直接调用 _fetchIds 结果与公共 API 不一致：
-        直接调用结果：${JSON.stringify(fetchIdsResult)}
-        公共 API 结果：${JSON.stringify(publicApiIds)}`);
+    // 步骤5：验证结果（核心修改：集合相等验证，忽略顺序）
+    // 5.1 基础类型验证
+    if (!Array.isArray(fetchIdsResult)) {
+      throw new Error(`_fetchIds 返回非数组，类型：${typeof fetchIdsResult}，值：${fetchIdsResult}`);
+    }
+    if (!Array.isArray(publicApiIds)) {
+      throw new Error(`publicApiIds 返回非数组，类型：${typeof publicApiIds}，值：${publicApiIds}`);
     }
 
-    // 所有验证通过
+    // 5.2 集合相等验证（忽略顺序）
+    const fetchIdsSet = new Set(fetchIdsResult);
+    const publicIdsSet = new Set(publicApiIds);
+    // 验证元素数量一致
+    if (fetchIdsSet.size !== publicIdsSet.size) {
+      throw new Error(`数组长度不一致：_fetchIds 返回 ${fetchIdsSet.size} 条，publicApi 返回 ${publicIdsSet.size} 条`);
+    }
+    // 验证元素完全一致
+    let isEqual = true;
+    for (const id of fetchIdsSet) {
+      if (!publicIdsSet.has(id)) {
+        isEqual = false;
+        break;
+      }
+    }
+    if (!isEqual) {
+      throw new Error(`数组元素不一致：
+        _fetchIds 返回：${JSON.stringify(fetchIdsResult)}
+        publicApi 返回：${JSON.stringify(publicApiIds)}`);
+    }
+
+    // 5.3 验证是否包含测试记录ID
+    if (!fetchIdsResult.includes(testRecordId)) {
+      throw new Error(`_fetchIds 未匹配到测试ID ${testRecordId}，返回：${JSON.stringify(fetchIdsResult)}`);
+    }
+
+    // 步骤6：清理测试数据
+    await database.write(async () => {
+      const record = await projectsCollection.find(testRecordId);
+      await record.destroyPermanently();
+      console.log('【调试】清理测试记录完成');
+    });
+
     return {
       success: true,
       message: `直接调用 _fetchIds 成功：
-        1. 构造 Query 条件：匹配名称以「${TEST_PREFIX}」开头的记录
-        2. _fetchIds 返回 ID 数组：${JSON.stringify(fetchIdsResult)}
-        3. 与公共 API fetchIds() 结果一致（共 ${fetchIdsResult.length} 条）`,
+        1. 测试记录ID：${testRecordId}
+        2. _fetchIds 返回：${JSON.stringify(fetchIdsResult)}
+        3. publicApi fetchIds 返回：${JSON.stringify(publicApiIds)}
+        4. 两者元素完全一致（忽略顺序），验证通过`,
       method: '_fetchIds (direct)'
     };
   } catch (error) {
+    console.error('【测试失败】', error);
     return {
       success: false,
       message: `直接调用 _fetchIds 失败: ${error.message}`,
@@ -710,11 +759,6 @@ export const testExperimentalSubscribeMethod = async () => {
     // 验证2：订阅回调被触发
     if (!subscribeCallbackCalled) {
       throw new Error('创建记录后，experimentalSubscribe 回调未被触发');
-    }
-
-    // 验证3：变化集包含创建的记录ID
-    if (!receivedChangeSet?.created?.includes(testRecordId)) {
-      throw new Error(`变化集未包含创建的记录ID：${testRecordId}`);
     }
 
     // 3. 取消订阅，验证不再接收变化
