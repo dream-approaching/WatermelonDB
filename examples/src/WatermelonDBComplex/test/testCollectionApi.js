@@ -1,11 +1,11 @@
 import { Q } from '@react-native-ohos/watermelondb';
 import { database, projectsCollection, tasksCollection } from './dbConfig';
 import { Alert } from 'react-native';
-
-// 测试结果结构说明：{ success: boolean, message: string, method: string }
+import { Database } from '@react-native-ohos/watermelondb';
 
 // 测试数据前缀（避免污染业务数据）
 const TEST_PREFIX = '[TEST]';
+const EXPECTED_TABLE_NAME = 'projects';
 
 // 清理测试数据
 export const cleanTestData = async () => {
@@ -36,50 +36,134 @@ export const cleanTestData = async () => {
     };
   }
 };
-const testDbMethod = async () => {
-  try {
-    // 测试点1：获取 Collection 的 db 实例
-    const collectionDb = tasksCollection.db;
-    setTestResult(prev => `${prev}✅ 获取 Collection.db 实例成功\n`);
 
-    // 测试点2：验证返回值是 Database 实例
-    if (collectionDb instanceof Database) {
-      setTestResult(prev => `${prev}✅ Collection.db 是 Database 实例\n`);
-    } else {
-      throw new Error('Collection.db 不是 Database 实例');
+// db方法
+export const testDbMethod = async () => {
+  try {
+    // 步骤1：获取 Collection 的 db 实例
+    const collectionDb = projectsCollection.db;
+    if (!collectionDb) throw new Error('Collection.db 返回空');
+
+    // 步骤2：验证 db 是 Database 实例
+    if (!(collectionDb instanceof Database)) {
+      throw new Error(`Collection.db 类型错误，期望 Database 实例，实际：${typeof collectionDb}`);
     }
 
-    // 测试点3：验证 db 与初始化的 database 实例一致
-    if (collectionDb === database) {
-      setTestResult(prev => `${prev}✅ Collection.db 与全局 database 实例一致\n`);
-    } else {
+    // 步骤3：验证 db 与全局 database 实例一致
+    if (collectionDb !== database) {
       throw new Error('Collection.db 与全局 database 实例不一致');
     }
 
-    // 测试点4：通过 db 调用 Database 的核心方法（write 事务）
+    // 步骤4：通过 db 调用 write 事务（验证功能可用性）
+    let testProject;
     await collectionDb.write(async () => {
-      // 临时创建一条测试记录（验证 db 的 write 能力）
-      const testTask = await tasksCollection.create(task => {
-        task.name = `测试 db 方法_${Date.now()}`;
-        task.is_completed = false;
+      testProject = await projectsCollection.create(project => {
+        project.name = `${TEST_PREFIX}测试 db 方法_${Date.now()}`;
+        project.deadline = new Date();
+        project.metadata = { priority: 'db_test', tags: ['db_test'] };
       });
-      setTestResult(prev => `${prev}✅ 通过 db.write 创建测试记录成功，ID：${testTask.id}\n`);
     });
 
-    // 测试点5：验证 db 的适配器/模型类配置
-    if (collectionDb.adapter) {
-      setTestResult(prev => `${prev}✅ Collection.db 包含有效适配器\n`);
-    }
-    if (collectionDb.modelClasses.includes(Task)) {
-      setTestResult(prev => `${prev}✅ Collection.db 已注册 Task 模型\n`);
-    }
+    // 步骤5：验证事务创建的记录有效性
+    if (!testProject?.id) throw new Error('通过 db.write 创建的记录无 ID');
 
-    setTestResult(prev => `${prev}\n🎉 Collection.db 方法测试全部通过！`);
+    // 步骤6：验证 db 的核心属性（适配器/模型类）
+    if (!collectionDb.adapter) throw new Error('Collection.db 无有效适配器');
+
+    // 所有验证通过，返回成功结果
+    return {
+      success: true,
+      message: `db 方法测试成功：
+        1. 成功获取 Collection.db 实例
+        2. 验证为 Database 实例
+        3. 与全局 database 实例一致
+        4. 通过 db.write 创建测试记录（ID: ${testProject.id}，名称: ${testProject.name}）
+        5. 验证 db 适配器配置有效`,
+      method: 'db'
+    };
   } catch (error) {
-    setTestResult(prev => `${prev}\n❌ 测试失败：${error.message}`);
-    console.error('Collection.db 测试报错：', error);
+    // 捕获所有异常，返回失败结果
+    return {
+      success: false,
+      message: `db 方法测试失败: ${error.message}`,
+      method: 'db'
+    };
   }
 };
+
+// table方法
+export const testTableMethod = async () => {
+  try {
+    // 核心验证：获取table值并校验
+    const tableName = projectsCollection.table;
+    
+    // 验证1：table值非空
+    if (!tableName) throw new Error('table 返回空值');
+    // 验证2：table值与预期表名一致
+    if (tableName !== EXPECTED_TABLE_NAME) {
+      throw new Error(`table 名称不匹配，期望：${EXPECTED_TABLE_NAME}，实际：${tableName}`);
+    }
+
+    return {
+      success: true,
+      message: `table 方法测试成功，表名：${tableName}`,
+      method: 'table'
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: `table 方法测试失败: ${error.message}`,
+      method: 'table'
+    };
+  }
+};
+
+/**
+ * 测试 Collection.schema 方法
+ */
+export const testSchemaMethod = async () => {
+  try {
+    const tableSchema = projectsCollection.schema;
+    
+    // 验证1：schema存在
+    if (!tableSchema) throw new Error('schema 返回空值');
+    // 验证2：schema的name与表名一致
+    if (tableSchema.name !== EXPECTED_TABLE_NAME) {
+      throw new Error(`schema 表名不匹配，期望：${EXPECTED_TABLE_NAME}，实际：${tableSchema.name}`);
+    }
+    // 验证3：columns存在且为对象（适配你的格式）
+    if (!tableSchema.columns) throw new Error('schema 缺少 columns 字段');
+    if (typeof tableSchema.columns !== 'object' || Array.isArray(tableSchema.columns)) {
+      throw new Error(`schema.columns 不是对象，实际类型：${Array.isArray(tableSchema.columns) ? '数组' : typeof tableSchema.columns}`);
+    }
+    // 验证4：schema包含核心字段（示例：name字段，适配对象格式）
+    const hasNameColumn = !!tableSchema.columns['name']; // 检查是否有name字段
+    if (!hasNameColumn) throw new Error('schema.columns 缺少核心字段：name');
+    // 可选：验证字段类型是否正确
+    if (tableSchema.columns['name'].type !== 'string') {
+      throw new Error(`name字段类型错误，期望：string，实际：${tableSchema.columns['name'].type}`);
+    }
+
+    // 构造友好的返回信息
+    const columnNames = Object.keys(tableSchema.columns).join(', ');
+    return {
+      success: true,
+      message: `schema 方法测试成功：
+        表名=${tableSchema.name}
+        包含字段=${columnNames}
+        name字段类型=${tableSchema.columns['name'].type}`,
+      method: 'schema'
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: `schema 方法测试失败: ${error.message}`,
+      method: 'schema'
+    };
+  }
+};
+
+
 // 测试 1: create 方法
 export const testCreateMethod = async () => {
   try {
@@ -134,7 +218,7 @@ export const testFindMethod = async () => {
   }
 };
 
-// 测试 3: query + fetch 方法（独立测试查询并获取数据列表）
+// 测试 3: query.fetch 方法底层 _fetchQuery（独立测试查询并获取数据列表）
 export const testQueryFetchMethod = async () => {
   try {
     // 步骤1：定义专属测试前缀，避免与其他测试数据冲突
@@ -151,8 +235,7 @@ export const testQueryFetchMethod = async () => {
           project.metadata = { priority: priorities[i], test_type: 'fetch' };
         });
       }
-    });
-    console.log('query + fetch 测试：测试数据创建完成');
+    })
 
     // 步骤3：执行条件查询（按名称前缀过滤）
     const query = projectsCollection.query(
@@ -201,7 +284,6 @@ export const testQueryFetchCountMethod = async () => {
   try {
     // 步骤1：定义专属测试前缀，与 fetch 测试数据隔离
     const countTestPrefix = `${TEST_PREFIX}QueryCount_${Date.now()}_`;
-    console.log('query + fetchCount 测试：开始创建测试数据，前缀:', countTestPrefix);
 
     // 步骤2：创建测试数据（2 条有效数据 + 1 条排除数据）
     await database.write(async () => {
@@ -218,14 +300,14 @@ export const testQueryFetchCountMethod = async () => {
         project.metadata = { test_type: 'other' };
       });
     });
-    console.log('query + fetchCount 测试：测试数据创建完成');
+    console.log('query.fetchCount 测试：测试数据创建完成');
 
     // 步骤3：测试 1 - 条件计数（带前缀的测试数据）
     const conditionQuery = projectsCollection.query(
       Q.where('name', Q.like(`${countTestPrefix}%`))
     );
     const conditionCount = await conditionQuery.fetchCount();
-    console.log('query + fetchCount 测试：条件计数结果:', conditionCount);
+    console.log('query.fetchCount 测试：条件计数结果:', conditionCount);
 
     // 核心验证点 1：条件计数与创建数量一致（预期 2 条）
     if (conditionCount !== 2) {
@@ -236,7 +318,7 @@ export const testQueryFetchCountMethod = async () => {
     const allQuery = projectsCollection.query();
     const allCount = await allQuery.fetchCount();
     const allData = await allQuery.fetch(); // 验证全量数据
-    console.log('query + fetchCount 测试：全量计数结果:', allCount, '全量数据数量:', allData.length);
+    console.log('query.fetchCount 测试：全量计数结果:', allCount, '全量数据数量:', allData.length);
 
     // 核心验证点 2：全量计数与 fetch 结果一致
     if (allCount !== allData.length) {
@@ -460,6 +542,231 @@ export const testPrepareCreateMethod = async () => {
   }
 };
 
+// DisposableFromDirtyRaw
+export const testDisposableFromDirtyRawMethod = async () => {
+  try {
+    // 1. 构造测试用的原始数据（dirtyRaw）
+    const testDirtyRaw = {
+      id: `disposable_${Date.now()}`, // 自定义ID
+      name: `${TEST_PREFIX}临时只读记录`,
+      deadline: Date.now(),
+      metadata: JSON.stringify({ priority: 'disposable', tags: ['test'] })
+    };
+
+    // 2. 调用 disposableFromDirtyRaw 创建临时记录
+    const disposableRecord = projectsCollection.disposableFromDirtyRaw(testDirtyRaw);
+    if (!disposableRecord) throw new Error('disposableFromDirtyRaw 返回空记录');
+
+    // 3. 验证记录字段与原始数据匹配
+    if (disposableRecord.id !== testDirtyRaw.id) {
+      throw new Error(`记录ID不匹配，期望：${testDirtyRaw.id}，实际：${disposableRecord.id}`);
+    }
+    if (disposableRecord.name !== testDirtyRaw.name) {
+      throw new Error(`记录名称不匹配，期望：${testDirtyRaw.name}，实际：${disposableRecord.name}`);
+    }
+    // 验证复杂字段（如metadata）
+    const recordMetadata = disposableRecord.metadata;
+    const rawMetadata = JSON.parse(testDirtyRaw.metadata);
+    if (recordMetadata.priority !== rawMetadata.priority) {
+      throw new Error(`metadata优先级不匹配，期望：${rawMetadata.priority}，实际：${recordMetadata.priority}`);
+    }
+
+    // 4. 核心验证：临时记录不可持久化（调用save会报错）
+    let saveError = null;
+    try {
+      await database.write(async () => {
+        await disposableRecord.save(); // 尝试保存（应报错）
+      });
+    } catch (err) {
+      saveError = err; // 捕获预期的错误
+    }
+    if (!saveError) {
+      throw new Error('disposableFromDirtyRaw 创建的记录可被save，违反只读特性');
+    }
+
+    // 5. 验证记录未被持久化（查询数据库确认不存在）
+    let persistedRecord = null;
+    try {
+      persistedRecord = await projectsCollection.find(testDirtyRaw.id);
+    } catch (err) {
+      // 预期：find不到该记录，会抛错，属于正常情况
+      persistedRecord = null;
+    }
+    if (persistedRecord) {
+      throw new Error('disposableFromDirtyRaw 创建的记录被意外持久化到数据库');
+    }
+
+    // 所有验证通过
+    return {
+      success: true,
+      message: `disposableFromDirtyRaw 方法测试成功：
+        1. 成功创建临时只读记录（ID：${disposableRecord.id}）
+        2. 记录字段与原始数据完全匹配
+        3. 验证save方法抛出错误（只读特性）
+        4. 记录未被持久化到数据库`,
+      method: 'disposableFromDirtyRaw'
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: `disposableFromDirtyRaw 方法测试失败: ${error.message}`,
+      method: 'disposableFromDirtyRaw'
+    };
+  }
+};
+
+export const testFetchIdsDirectly = async () => {
+  try {
+    // 1. 构造 Query 实例（_fetchIds 第一个参数必须是 Query 实例）
+    const testQuery = projectsCollection.query(
+      Q.where('name', Q.like(`${TEST_PREFIX}%`)), // 匹配测试前缀的记录
+      Q.sortBy('deadline', Q.desc)
+    );
+
+    // 2. 封装 _fetchIds 为 Promise（适配异步回调）
+    const fetchIdsResult = await new Promise((resolve, reject) => {
+      // 直接调用 _fetchIds：参数1=Query实例，参数2=回调函数(err, ids)
+      projectsCollection._fetchIds(
+        testQuery,
+        (err, ids) => {
+          if (err) {
+            reject(new Error(`_fetchIds 执行报错：${err.message}`));
+            return;
+          }
+          resolve(ids); // 成功则返回 ID 数组
+        }
+      );
+    });
+
+    // 3. 验证 _fetchIds 返回结果
+    if (!fetchIdsResult) throw new Error('_fetchIds 返回空结果');
+    if (!Array.isArray(fetchIdsResult)) throw new Error(`_fetchIds 返回非数组，实际类型：${typeof fetchIdsResult}`);
+
+    // 4. （可选）对比公共 API fetchIds() 结果，验证一致性
+    const publicApiIds = await testQuery.fetchIds(); // 公共 API（底层也是 _fetchIds）
+    if (JSON.stringify(fetchIdsResult) !== JSON.stringify(publicApiIds)) {
+      throw new Error(`直接调用 _fetchIds 结果与公共 API 不一致：
+        直接调用结果：${JSON.stringify(fetchIdsResult)}
+        公共 API 结果：${JSON.stringify(publicApiIds)}`);
+    }
+
+    // 所有验证通过
+    return {
+      success: true,
+      message: `直接调用 _fetchIds 成功：
+        1. 构造 Query 条件：匹配名称以「${TEST_PREFIX}」开头的记录
+        2. _fetchIds 返回 ID 数组：${JSON.stringify(fetchIdsResult)}
+        3. 与公共 API fetchIds() 结果一致（共 ${fetchIdsResult.length} 条）`,
+      method: '_fetchIds (direct)'
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: `直接调用 _fetchIds 失败: ${error.message}`,
+      method: '_fetchIds (direct)'
+    };
+  }
+};
+
+
+// ExperimentalSubscribe
+export const testExperimentalSubscribeMethod = async () => {
+  try {
+    // 定义测试用变量
+    let subscribeCallbackCalled = false; // 标记回调是否被触发
+    let receivedChangeSet = null; // 存储接收到的变化集
+    const testRecordName = `${TEST_PREFIX}订阅测试_${Date.now()}`;
+    let unsubscribe = null; // 存储取消订阅函数
+
+    // 1. 调用 experimentalSubscribe 订阅集合变化
+    unsubscribe = projectsCollection.experimentalSubscribe(
+      (changeSet) => {
+        // 订阅回调：记录变化集
+        subscribeCallbackCalled = true;
+        receivedChangeSet = changeSet;
+      },
+      { debugInfo: 'test_experimentalSubscribe' } // 可选调试信息
+    );
+
+    // 验证1：返回有效的取消订阅函数
+    if (typeof unsubscribe !== 'function') {
+      throw new Error('experimentalSubscribe 返回的不是取消订阅函数');
+    }
+
+    // 2. 创建测试记录，触发集合变化（验证订阅能接收变化）
+    let testRecordId = null;
+    await database.write(async () => {
+      const newRecord = await projectsCollection.create(project => {
+        project.name = testRecordName;
+        project.deadline = Date.now();
+        project.metadata = JSON.stringify({ priority: 'subscribe_test', tags: ['test'] });
+      });
+      testRecordId = newRecord.id;
+    });
+
+    // 等待异步回调触发（给一点时间，避免回调未执行完就校验）
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // 验证2：订阅回调被触发
+    if (!subscribeCallbackCalled) {
+      throw new Error('创建记录后，experimentalSubscribe 回调未被触发');
+    }
+
+    // 验证3：变化集包含创建的记录ID
+    if (!receivedChangeSet?.created?.includes(testRecordId)) {
+      throw new Error(`变化集未包含创建的记录ID：${testRecordId}`);
+    }
+
+    // 3. 取消订阅，验证不再接收变化
+    unsubscribe(); // 执行取消订阅
+    subscribeCallbackCalled = false; // 重置标记
+    const testRecordName2 = `${TEST_PREFIX}取消订阅测试_${Date.now()}`;
+
+    // 再次创建记录，验证回调不触发
+    await database.write(async () => {
+      await projectsCollection.create(project => {
+        project.name = testRecordName2;
+        project.deadline = Date.now();
+      });
+    });
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // 验证4：取消订阅后回调未被触发
+    if (subscribeCallbackCalled) {
+      throw new Error('取消订阅后，创建记录仍触发了 experimentalSubscribe 回调');
+    }
+
+    // 4. 清理测试数据（可选，保持数据库整洁）
+    await database.write(async () => {
+      const record1 = await projectsCollection.find(testRecordId);
+      await record1.destroyPermanently();
+      // 尝试查找第二条测试记录并删除（可能因取消订阅后未记录ID，此处简化）
+      const record2List = await projectsCollection.query(
+        Q.where('name', testRecordName2)
+      ).fetch();
+      if (record2List.length > 0) {
+        await record2List[0].destroyPermanently();
+      }
+    });
+
+    // 所有验证通过
+    return {
+      success: true,
+      message: `experimentalSubscribe 方法测试成功：
+        1. 返回有效的取消订阅函数
+        2. 创建记录时回调触发，接收到变化集（包含创建的记录ID：${testRecordId}）
+        3. 取消订阅后，创建新记录回调不再触发
+        4. 已清理测试数据`,
+      method: 'experimentalSubscribe'
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: `experimentalSubscribe 方法测试失败: ${error.message}`,
+      method: 'experimentalSubscribe'
+    };
+  }
+};
 
 // 批量运行所有测试
 export const runAllTests = async (onResult) => {

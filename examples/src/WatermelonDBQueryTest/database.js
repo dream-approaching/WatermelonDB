@@ -28,32 +28,6 @@ export const seedTestData = async () => {
   await database.write(async () => {
     const articlesCollection = database.collections.get('articles');
     
-    // 测试数据1
-    await articlesCollection.create(article => {
-      article.title = '鸿蒙开发实战';
-      article.author = '测试作者1';
-      article.content = 'WatermelonDB 鸿蒙版测试内容';
-      article.publishDate = Date.now();
-      article.isFeatured = true;
-    });
-
-    // 测试数据2
-    await articlesCollection.create(article => {
-      article.title = 'React Native 跨平台';
-      article.author = '测试作者2';
-      // 不设置 content，验证默认值
-      article.publishDate = Date.now() - 10 * 24 * 60 * 60 * 1000;
-      article.isFeatured = false;
-    });
-
-    // 测试数据3
-    await articlesCollection.create(article => {
-      article.title = '30天前的旧文章';
-      article.author = '测试作者3';
-      article.content = '旧文章测试内容';
-      article.publishDate = Date.now() - 35 * 24 * 60 * 60 * 1000;
-      article.isFeatured = false;
-    });
   });
 
   console.log('[seedTestData] 测试数据创建完成（共3条）');

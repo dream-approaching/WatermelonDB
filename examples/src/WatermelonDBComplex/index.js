@@ -17,7 +17,7 @@ import { dbModels } from './models/index.js';
 import { SAMPLE_PROJECTS, SAMPLE_TASKS } from './mockdata.js';
 import CollectionTestPage from './test/CollectionTestPage'; // 导入测试页面
 
-
+// 适配器
 const adapter = new SQLiteAdapter({
   dbName: 'WatermelonDBComplex', // 数据库名
   schema: mySchema, // 确保 schema 正确导入
@@ -367,10 +367,6 @@ const ProjectTaskScreen = () => {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>WatermelonDB 项目/任务 Demo</Text>
-        <Text style={styles.subtitle}>
-          演示 Database / Model / Q / SQLiteAdapter / schemaMigrations / appSchema /
-          children / field / text / writer / Associations / Relation / json / date / tableSchema。
-        </Text>
         <View style={styles.actionRow}>
           <ActionButton label="导入示例项目" onPress={seedDemoData} />
           <ActionButton label="随机新增项目" type="secondary" onPress={addRandomProject} />

@@ -5,7 +5,8 @@ import WatermelonDBQueryTest from './WatermelonDBQueryTest/index';
 import WatermelonDBSimpleBase from './WaterDatabase'; 
 import LocalStorageTest from './WaterLocalStorage'; 
 import CollectionMapTestPage from './WatermelonDBCollectionMap'; 
-import WatermelonRelaDemo from './WatermelonDBSimple'; 
+import WatermelonRelaDemo from './WatermerlonDBRelation'; 
+import SchemaExample from './schemaTests/SchemaTestScreen.js'; 
 import WatermelonDBSimplejsiTure from './WatermelonDBSimplejsiTure'; 
 
 
@@ -27,6 +28,8 @@ export default function MainPage() {
         return <CollectionMapTestPage />;
       case 'local':
         return <LocalStorageTest />;
+      case 'schema':
+        return <SchemaExample />;
       case 'realtion':
         return <WatermelonRelaDemo />;
       case 'jsiTure':
@@ -39,6 +42,11 @@ export default function MainPage() {
             <Button
               title="进入Query测试页面"
               onPress={() => setCurrentScreen('query')}
+              style={styles.button}
+            />
+            <Button
+              title="进入Schema测试页面"
+              onPress={() => setCurrentScreen('schema')}
               style={styles.button}
             />
             <Button

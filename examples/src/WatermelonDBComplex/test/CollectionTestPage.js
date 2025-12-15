@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { runAllTests, cleanTestData, testDbMethod, testCreateMethod, testFindMethod, testQueryFetchMethod, testQueryFetchCountMethod, testFindAndObserveMethod, testPrepareCreateMethod } from './testCollectionApi';
+import { runAllTests, cleanTestData, testDbMethod, testCreateMethod, testSchemaMethod,testTableMethod,
+  testFindMethod, testQueryFetchMethod, testQueryFetchCountMethod, testFetchIdsDirectly, testFindAndObserveMethod, testPrepareCreateMethod,
+  testDisposableFromDirtyRawMethod, testExperimentalSubscribeMethod
+} from './testCollectionApi';
 
 // 测试按钮组件
 const TestButton = ({ label, onPress, disabled = false }) => (
@@ -56,21 +59,26 @@ const CollectionTestPage = () => {
       <View style={styles.btnGroup}>
         <TestButton label="运行所有测试" onPress={runAll} disabled={testing} />
         <TestButton label="清理测试数据" onPress={() => runSingle(cleanTestData)} disabled={testing} />
-        <TestButton label="清空结果" onPress={() => setResults([])} disabled={testing} />
+        <TestButton label="清空测试结果" onPress={() => setResults([])} disabled={testing} />
       </View>
 
       {/* 单个测试按钮 */}
       <Text style={styles.subtitle}>单个 API 测试</Text>
       <View style={styles.singleBtnGroup}>
         <TestButton
-           label="点击测试 Collection.db 方法" onPress={() => runSingle(testDbMethod)} disabled={testing} 
+           label="Collection.db" onPress={() => runSingle(testDbMethod)} disabled={testing} 
         />
         <TestButton label="create" onPress={() => runSingle(testCreateMethod)} disabled={testing} />
+        <TestButton label="table" onPress={() => runSingle(testTableMethod)} disabled={testing} />
+        <TestButton label="Schema" onPress={() => runSingle(testSchemaMethod)} disabled={testing} />
         <TestButton label="find" onPress={() => runSingle(testFindMethod)} disabled={testing} />
-        <TestButton label="query+fetch" onPress={() => runSingle(testQueryFetchMethod)} disabled={testing} />
-        <TestButton label="query + fetchCount" onPress={() => runSingle(testQueryFetchCountMethod)} disabled={testing} />
+        <TestButton label="_fetchQuery" onPress={() => runSingle(testQueryFetchMethod)} disabled={testing} />
+        <TestButton label="_fetchCount" onPress={() => runSingle(testQueryFetchCountMethod)} disabled={testing} />
+        <TestButton label="_FetchIds" onPress={() => runSingle(testFetchIdsDirectly)} disabled={testing} />
         <TestButton label="findAndObserve" onPress={() => runSingle(testFindAndObserveMethod)} disabled={testing} />
         <TestButton label="prepareCreate" onPress={() => runSingle(testPrepareCreateMethod)} disabled={testing} />
+        <TestButton label="DisposableFromDirtyRaw" onPress={() => runSingle(testDisposableFromDirtyRawMethod)} disabled={testing} />
+        <TestButton label="ExperimentalSubscribe" onPress={() => runSingle(testExperimentalSubscribeMethod)} disabled={testing} />
       </View>
 
       {/* 测试结果展示 */}
