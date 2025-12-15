@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { runAllTests, cleanTestData, testCreateMethod, testFindMethod, testQueryFetchMethod, testQueryFetchCountMethod, testFindAndObserveMethod, testPrepareCreateMethod } from './testCollectionApi';
+import { runAllTests, cleanTestData, testDbMethod, testCreateMethod, testFindMethod, testQueryFetchMethod, testQueryFetchCountMethod, testFindAndObserveMethod, testPrepareCreateMethod } from './testCollectionApi';
 
 // 测试按钮组件
 const TestButton = ({ label, onPress, disabled = false }) => (
@@ -21,7 +21,6 @@ const ResultItem = ({ result }) => (
     <Text style={styles.resultMsg}>{result.message}</Text>
   </View>
 );
-
 const CollectionTestPage = () => {
   // 移除 TS 类型标注，直接初始化数组
   const [results, setResults] = useState([]);
@@ -63,6 +62,9 @@ const CollectionTestPage = () => {
       {/* 单个测试按钮 */}
       <Text style={styles.subtitle}>单个 API 测试</Text>
       <View style={styles.singleBtnGroup}>
+        <TestButton
+           label="点击测试 Collection.db 方法" onPress={() => runSingle(testDbMethod)} disabled={testing} 
+        />
         <TestButton label="create" onPress={() => runSingle(testCreateMethod)} disabled={testing} />
         <TestButton label="find" onPress={() => runSingle(testFindMethod)} disabled={testing} />
         <TestButton label="query+fetch" onPress={() => runSingle(testQueryFetchMethod)} disabled={testing} />
@@ -98,6 +100,19 @@ const styles = StyleSheet.create({
     color: '#2d3748',
     textAlign: 'center',
     marginBottom: 16,
+  },
+  resultTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  resultScroll: {
+    flex: 1,
+  },
+  resultText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#333',
   },
   subtitle: {
     fontSize: 16,

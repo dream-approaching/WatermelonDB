@@ -36,7 +36,50 @@ export const cleanTestData = async () => {
     };
   }
 };
+const testDbMethod = async () => {
+  try {
+    // 测试点1：获取 Collection 的 db 实例
+    const collectionDb = tasksCollection.db;
+    setTestResult(prev => `${prev}✅ 获取 Collection.db 实例成功\n`);
 
+    // 测试点2：验证返回值是 Database 实例
+    if (collectionDb instanceof Database) {
+      setTestResult(prev => `${prev}✅ Collection.db 是 Database 实例\n`);
+    } else {
+      throw new Error('Collection.db 不是 Database 实例');
+    }
+
+    // 测试点3：验证 db 与初始化的 database 实例一致
+    if (collectionDb === database) {
+      setTestResult(prev => `${prev}✅ Collection.db 与全局 database 实例一致\n`);
+    } else {
+      throw new Error('Collection.db 与全局 database 实例不一致');
+    }
+
+    // 测试点4：通过 db 调用 Database 的核心方法（write 事务）
+    await collectionDb.write(async () => {
+      // 临时创建一条测试记录（验证 db 的 write 能力）
+      const testTask = await tasksCollection.create(task => {
+        task.name = `测试 db 方法_${Date.now()}`;
+        task.is_completed = false;
+      });
+      setTestResult(prev => `${prev}✅ 通过 db.write 创建测试记录成功，ID：${testTask.id}\n`);
+    });
+
+    // 测试点5：验证 db 的适配器/模型类配置
+    if (collectionDb.adapter) {
+      setTestResult(prev => `${prev}✅ Collection.db 包含有效适配器\n`);
+    }
+    if (collectionDb.modelClasses.includes(Task)) {
+      setTestResult(prev => `${prev}✅ Collection.db 已注册 Task 模型\n`);
+    }
+
+    setTestResult(prev => `${prev}\n🎉 Collection.db 方法测试全部通过！`);
+  } catch (error) {
+    setTestResult(prev => `${prev}\n❌ 测试失败：${error.message}`);
+    console.error('Collection.db 测试报错：', error);
+  }
+};
 // 测试 1: create 方法
 export const testCreateMethod = async () => {
   try {
