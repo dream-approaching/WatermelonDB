@@ -139,28 +139,17 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
 
                     isDatabaseInitialized = true;
                     DLOG(ERROR) << "123456789 数据库初始化成功 - store: " << globalStore;
-                    //-------------创建测试表并插入数据-----------------------------
-                    // const char *createTableSQL = "CREATE TABLE IF NOT EXISTS movies (id TEXT PRIMARY KEY, title TEXT, year INTEGER, genre TEXT)";
-                    // errCode = OH_Rdb_ExecuteV2(globalStore, createTableSQL, nullptr, nullptr);
-                    // if (errCode != RDB_OK)
-                    // {
-                    //     DLOG(ERROR) << "123456789 创建表失败: " << errCode;
-                    // }
-                    // else
-                    // {
-                    //     DLOG(ERROR) << "123456789 表创建成功";
 
-                    //     // 插入测试数据
-                    //     const char *insertSQL = "INSERT OR REPLACE INTO movies (id, title, year, genre) VALUES ('6', '测试6', 33333, 'cccccc')";
+                    // 设置数据库初始版本号
+                    std::string setVersionSql = "PRAGMA user_version = " + std::to_string(expectedVersion);
+                    DLOG(ERROR) << "123456789 设置初始数据库版本号: " << setVersionSql;
+                    int setVersionResult = OH_Rdb_ExecuteV2(globalStore, setVersionSql.c_str(), nullptr, nullptr);
+                    if (setVersionResult != RDB_OK)
+                    {
+                        DLOG(ERROR) << "123456789 设置初始数据库版本号失败: " << setVersionResult;
+                        throw jsi::JSError(rt, "Failed to set initial database version to " + std::to_string(expectedVersion));
+                    }
 
-                    //     errCode = OH_Rdb_ExecuteV2(globalStore, insertSQL, nullptr, nullptr);
-                    //     DLOG(ERROR) << "123456789 插入数据的结果: " << errCode;
-                    // }
-                    //----------------------删除数据--------------------------
-                    // const char *dropTableSQL = "DROP TABLE IF EXISTS movies";
-                    // errCode = OH_Rdb_ExecuteV2(globalStore, dropTableSQL, nullptr, nullptr);
-                    // DLOG(ERROR) << "123456789 删除表结果: " << errCode;
-                    //------------------------------------------------
                     // 创建响应对象
                     jsi::Object response(rt);
                     response.setProperty(rt, "code", jsi::String::createFromUtf8(rt, "ok"));
@@ -473,6 +462,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                             int result = OH_Rdb_ExecuteV2(globalStore, migrationSql.c_str(), nullptr, nullptr);
                                             if (result != RDB_OK)
                                             {
+                                                DLOG(ERROR) << "123456789 执行迁移失败 ：" << migrationSql << ", error code: " << std::to_string(result);
                                                 throw std::runtime_error("Migration to version " + std::to_string(version) + " failed, SQL: " + migrationSql + ", error code: " + std::to_string(result));
                                             }
                                         }
@@ -482,6 +472,18 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                 {
                                     DLOG(ERROR) << "123456789 未找到版本 " << version << " 的迁移，跳过";
                                 }
+                            }
+
+                            // 在所有迁移执行完成后，设置数据库版本号
+                            // std::string setVersionSql = "PRAGMA user_version = " + std::to_string(toVersion);
+                            // std::string setVersionSql = "PRAGMA user_version(3)";
+                            std::string setVersionSql = "PRAGMA user_version = 3";
+                            DLOG(ERROR) << "123456789 设置数据库版本号: " << setVersionSql;
+                            int setVersionResult = OH_Rdb_ExecuteV2(globalStore, setVersionSql.c_str(), nullptr, nullptr);
+                            if (setVersionResult != RDB_OK)
+                            {
+                                DLOG(ERROR) << "123456789 设置数据库版本号失败: " << setVersionResult;
+                                throw std::runtime_error("Failed to set database version to " + std::to_string(toVersion));
                             }
 
                             success = true;
@@ -501,6 +503,30 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                 OH_Rdb_RollBack(globalStore);
                                 throw jsi::JSError(rt, "Failed to commit transaction for migrations");
                             }
+
+                            // // 验证是否成功
+                            // int currentVersion = -1;
+                            // OH_Cursor *versionCursor = OH_Rdb_ExecuteQueryV2(globalStore, "PRAGMA user_version", nullptr);
+                            // if (versionCursor != nullptr)
+                            // {
+                            //     if (versionCursor->goToNextRow(versionCursor) == RDB_OK)
+                            //     {
+                            //         int64_t versionValue;
+                            //         if (versionCursor->getInt64(versionCursor, 0, &versionValue) == RDB_OK)
+                            //         {
+                            //             currentVersion = static_cast<int>(versionValue);
+                            //             DLOG(ERROR) << "123456789 迁移后查询到当前数据库版本号: " << currentVersion;
+                            //         }
+                            //     }
+                            //     versionCursor->destroy(versionCursor);
+                            // }
+                            // // 验证版本号是否一致
+                            // if (currentVersion != toVersion)
+                            // {
+                            //     DLOG(ERROR) << "123456789 迁移版本验证失败 - 当前版本: " << currentVersion << ", 目标版本: " << toVersion;
+                            //     throw jsi::JSError(rt, "Migration version verification failed. Current version: " +
+                            //                                std::to_string(currentVersion) + ", Target version: " + std::to_string(toVersion));
+                            // }
 
                             jsi::Object response(rt);
                             response.setProperty(rt, "code", jsi::String::createFromUtf8(rt, "ok"));
@@ -565,39 +591,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                         auto result = jsi::Object(rt);
                         result.setProperty(rt, "id", jsi::String::createFromUtf8(rt, id));
                         result.setProperty(rt, "table", jsi::String::createFromUtf8(rt, tableName));
-
-                        //---------------------测试查询----------------------------------------
-                        // OH_Cursor *testCursor = OH_Rdb_ExecuteQueryV2(globalStore, "SELECT * FROM movies", nullptr);
-                        // if (testCursor != nullptr)
-                        // {
-                        //     int rowCount = 0;
-                        //     while (testCursor->goToNextRow(testCursor) == RDB_OK)
-                        //     {
-                        //         rowCount++;
-                        //         int64_t idValue;
-                        //         char titleValue[256] = {0};
-                        //         int64_t yearValue;
-
-                        //         if (testCursor->getInt64(testCursor, 0, &idValue) == RDB_OK)
-                        //         {
-                        //             testCursor->getText(testCursor, 1, titleValue, sizeof(titleValue));
-                        //             testCursor->getInt64(testCursor, 2, &yearValue);
-                        //             DLOG(ERROR) << "123456789 数据 - id:" << idValue << " title:" << titleValue << " year:" << yearValue;
-                        //         }
-                        //     }
-
-                        //     if (rowCount == 0)
-                        //     {
-                        //         DLOG(ERROR) << "123456789 movies表为空";
-                        //     }
-                        //     else
-                        //     {
-                        //         DLOG(ERROR) << "123456789 共找到" << rowCount << "条数据";
-                        //     }
-
-                        //     testCursor->destroy(testCursor);
-                        // }
-                        //-------------------------------------------------------------
 
                         // 执行查询
                         OH_Cursor *cursor = OH_Rdb_ExecuteQueryV2(globalStore, sql.c_str(), nullptr);
@@ -724,7 +717,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                         throw jsi::JSError(rt, "query requires 1 argument");
                     }
 
-                    // std::string tableName = args[0].getString(rt).utf8(rt);
                     std::string sql = args[0].getString(rt).utf8(rt);
 
                     // DLOG(ERROR) << "123456789 query调用 - 表: " << tableName << ", SQL: " << sql;
@@ -864,6 +856,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                 2,
                 [](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value
                 {
+                    DLOG(ERROR) << "123456789 queryAsArray调用 - : ";
                     if (count < 2)
                     {
                         throw jsi::JSError(rt, "queryAsArray requires 2 arguments");
@@ -871,7 +864,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
 
                     std::string tableName = args[0].getString(rt).utf8(rt);
                     std::string sql = args[1].getString(rt).utf8(rt);
-
                     DLOG(ERROR) << "123456789 queryAsArray调用 - 表: " << tableName;
 
                     try
@@ -1175,7 +1167,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
 
                                         if (cursor->getColumnType(cursor, i, &columnType) == RDB_OK)
                                         {
-                                        
+
                                             switch (columnType)
                                             {
                                             case 1: // TYPE_INT64
@@ -1400,28 +1392,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
 
                                 if (type == "INSERT")
                                 {
-                                    // std::string checksql = "SELECT EXISTS(SELECT 1 FROM movies WHERE id = ?)";
-                                    // if (jsArguments.size(rt) > 0)
-                                    // {
-                                    //     jsi::Value firstArg = jsArguments.getValueAtIndex(rt, 0);
-                                    //     if (firstArg.isString())
-                                    //     {
-                                    //         std::string arg = firstArg.getString(rt).utf8(rt);
-                                    //         checksql.replace(checksql.find("?"), 1, "'" + arg + "'");
-                                    //     }
-                                    //     else if (firstArg.isNumber())
-                                    //     {
-                                    //         int64_t arg = firstArg.getNumber();
-                                    //         checksql.replace(checksql.find("?"), 1, std::to_string(arg));
-                                    //     }
-                                    // }
-                                    // DLOG(ERROR) << "123456789 INSERTchecksql是: " << checksql;
-                                    // OH_Cursor *checkcursor = OH_Rdb_ExecuteQueryV2(globalStore, checksql.c_str(), nullptr);
-                                    // if (checkcursor != nullptr && checkcursor->goToNextRow(checkcursor) == RDB_OK)
-                                    // {
-                                    //     DLOG(ERROR) << "123456789 INSERT失败 - ID已存在，sql: " << checksql;
-                                    //     throw jsi::JSError(rt, "This ID already exists. Please use a different ID.");
-                                    // }
 
                                     DLOG(ERROR) << "123456789 批量执行: " << sql;
                                     int execResult = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
@@ -1582,35 +1552,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
 
                             if (type == "INSERT" && !sql.empty())
                             {
-                                // std::string checksql = "SELECT EXISTS(SELECT 1 FROM movies WHERE id = ?)";
-                                // if (argumentsArray.size() > 0)
-                                // {
-                                //     if (argumentsArray[0].is_string())
-                                //     {
-                                //         std::string arg = argumentsArray[0].get<std::string>();
-                                //         arguments.push_back(arg);
-                                //         checksql.replace(checksql.find("?"), 1, "'" + arguments.back() + "'");
-                                //     }
-                                //     else if (argumentsArray[0].is_number_integer())
-                                //     {
-                                //         int64_t arg = argumentsArray[0].get<int64_t>();
-                                //         arguments.push_back(std::to_string(arg));
-                                //         checksql.replace(checksql.find("?"), 1, arguments.back());
-                                //     }
-                                //     else if (argumentsArray[0].is_number_float())
-                                //     {
-                                //         double arg = argumentsArray[0].get<double>();
-                                //         arguments.push_back(std::to_string(arg));
-                                //         checksql.replace(checksql.find("?"), 1, arguments.back());
-                                //     }
-                                // }
-                                // DLOG(ERROR) << "123456789 INSERTchecksql是: " << checksql;
-                                // OH_Cursor *checkcursor = OH_Rdb_ExecuteQueryV2(globalStore, checksql.c_str(), nullptr);
-                                // if (checkcursor != nullptr && checkcursor->goToNextRow(checkcursor) == RDB_OK)
-                                // {
-                                //     DLOG(ERROR) << "123456789 INSERT失败 - ID已存在: " << arguments.back();
-                                //     throw jsi::JSError(rt, "This ID already exists. Please use a different ID.");
-                                // }
 
                                 int execResult = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
                                 if (execResult == RDB_OK)
@@ -1758,20 +1699,15 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
             auto unsafeLoadFromSyncFunc = jsi::Function::createFromHostFunction(
                 rt,
                 jsi::PropNameID::forAscii(rt, "unsafeLoadFromSync"),
-                4,
+                1,
                 [](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value
                 {
-                    if (count < 4)
+                    if (count < 1)
                     {
-                        throw jsi::JSError(rt, "unsafeLoadFromSync requires 4 arguments");
+                        throw jsi::JSError(rt, "unsafeLoadFromSync requires 1 argument");
                     }
 
-                    auto jsonId = (int)args[0].getNumber();
-                    auto schema = args[1].getObject(rt);
-                    std::string preamble = args[2].getString(rt).utf8(rt);
-                    std::string postamble = args[3].getString(rt).utf8(rt);
-
-                    DLOG(ERROR) << "123456789 unsafeLoadFromSync调用 - jsonId: " << jsonId;
+                    auto syncData = args[0].getObject(rt);
 
                     try
                     {
@@ -1795,58 +1731,134 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
 
                         try
                         {
-                            // 1. 执行前导SQL（preamble）
-                            if (!preamble.empty())
+                            std::vector<std::string> sqlStatements;
+
+                            if (syncData.hasProperty(rt, "tables"))
                             {
-                                DLOG(ERROR) << "123456789 执行前导SQL: " << preamble;
-                                int result = OH_Rdb_ExecuteV2(globalStore, preamble.c_str(), nullptr, nullptr);
-                                if (result != RDB_OK)
+                                auto tablesValue = syncData.getProperty(rt, "tables");
+                                if (tablesValue.isObject() && tablesValue.getObject(rt).isArray(rt))
                                 {
-                                    throw std::runtime_error("Failed to execute preamble SQL, error code: " + std::to_string(result));
+                                    auto tablesArray = tablesValue.getObject(rt).getArray(rt);
+                                    size_t tableCount = tablesArray.length(rt);
+
+                                    DLOG(ERROR) << "123456789 发现 " << tableCount << " 个表需要同步";
+
+                                    for (size_t tableIndex = 0; tableIndex < tableCount; tableIndex++)
+                                    {
+                                        auto tableValue = tablesArray.getValueAtIndex(rt, tableIndex);
+                                        if (tableValue.isObject())
+                                        {
+                                            auto tableObj = tableValue.getObject(rt);
+
+                                            // 获取表名
+                                            std::string tableName;
+                                            if (tableObj.hasProperty(rt, "name"))
+                                            {
+                                                tableName = tableObj.getProperty(rt, "name").getString(rt).utf8(rt);
+                                                DLOG(ERROR) << "123456789 处理表: " << tableName;
+                                            }
+                                            else
+                                            {
+                                                DLOG(ERROR) << "123456789 跳过无名称的表";
+                                                continue;
+                                            }
+
+                                            // 获取行数据
+                                            if (tableObj.hasProperty(rt, "rows"))
+                                            {
+                                                auto rowsValue = tableObj.getProperty(rt, "rows");
+                                                if (rowsValue.isObject() && rowsValue.getObject(rt).isArray(rt))
+                                                {
+                                                    auto rowsArray = rowsValue.getObject(rt).getArray(rt);
+                                                    size_t rowCount = rowsArray.length(rt);
+
+                                                    DLOG(ERROR) << "123456789 表 " << tableName << " 有 " << rowCount << " 行数据";
+
+                                                    for (size_t rowIndex = 0; rowIndex < rowCount; rowIndex++)
+                                                    {
+                                                        auto rowValue = rowsArray.getValueAtIndex(rt, rowIndex);
+                                                        if (rowValue.isObject())
+                                                        {
+                                                            auto rowObj = rowValue.getObject(rt);
+
+                                                            // 构建INSERT OR REPLACE语句
+                                                            std::string sql = "INSERT OR REPLACE INTO " + tableName + " (";
+                                                            std::string values = "VALUES (";
+
+                                                            // 获取所有属性名
+                                                            auto propertyNames = rowObj.getPropertyNames(rt);
+                                                            size_t propCount = propertyNames.length(rt);
+                                                            bool firstProp = true;
+
+                                                            for (size_t propIndex = 0; propIndex < propCount; propIndex++)
+                                                            {
+                                                                auto propName = propertyNames.getValueAtIndex(rt, propIndex).getString(rt).utf8(rt);
+                                                                auto propValue = rowObj.getProperty(rt, propName.c_str());
+
+                                                                if (!firstProp)
+                                                                {
+                                                                    sql += ", ";
+                                                                    values += ", ";
+                                                                }
+                                                                firstProp = false;
+
+                                                                sql += propName;
+
+                                                                // 处理不同类型的值
+                                                                if (propValue.isString())
+                                                                {
+                                                                    std::string strValue = propValue.getString(rt).utf8(rt);
+                                                                    // 转义单引号
+                                                                    std::string escapedValue;
+                                                                    for (char c : strValue)
+                                                                    {
+                                                                        if (c == '\'')
+                                                                            escapedValue += "''";
+                                                                        else
+                                                                            escapedValue += c;
+                                                                    }
+                                                                    values += "'" + escapedValue + "'";
+                                                                }
+                                                                else if (propValue.isNumber())
+                                                                {
+                                                                    double numValue = propValue.getNumber();
+                                                                    values += std::to_string(numValue);
+                                                                }
+                                                                else if (propValue.isBool())
+                                                                {
+                                                                    bool boolValue = propValue.getBool();
+                                                                    values += boolValue ? "1" : "0";
+                                                                }
+                                                                else if (propValue.isNull() || propValue.isUndefined())
+                                                                {
+                                                                    values += "NULL";
+                                                                }
+                                                                else
+                                                                {
+                                                                    values += "NULL"; // 其他类型设为NULL
+                                                                }
+                                                            }
+
+                                                            sql += ") " + values + ")";
+                                                            sqlStatements.push_back(sql);
+                                                            DLOG(ERROR) << "123456789 生成SQL: " << sql;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
-                            DLOG(ERROR) << "123456789 处理同步数据 - jsonId: " << jsonId;
-
-                            // 2.获取数据
-                            std::string tableName = "posts"; // 默认表名
-                            if (schema.hasProperty(rt, "table"))
-                            {
-                                tableName = schema.getProperty(rt, "table").getString(rt).utf8(rt);
-                            }
-                            else if (schema.hasProperty(rt, "name"))
-                            {
-                                tableName = schema.getProperty(rt, "name").getString(rt).utf8(rt);
-                            }
-                            else if (schema.hasProperty(rt, "tableName"))
-                            {
-                                tableName = schema.getProperty(rt, "tableName").getString(rt).utf8(rt);
-                            }
-
-                            std::vector<std::string> sampleData = {
-                                "INSERT OR REPLACE INTO " + tableName + " (id, title, body) VALUES ('sync1', '同步标题1', '同步内容1')",
-                                "INSERT OR REPLACE INTO " + tableName + " (id, title, body) VALUES ('sync2', '同步标题2', '同步内容2')",
-                                "INSERT OR REPLACE INTO " + tableName + " (id, title, body) VALUES ('sync3', '同步标题3', '同步内容3')"};
-
                             // 3.同步数据
-                            for (const auto &sql : sampleData)
+                            for (const auto &sql : sqlStatements)
                             {
                                 DLOG(ERROR) << "123456789 执行插入SQL: " << sql;
                                 int result = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
                                 if (result != RDB_OK)
                                 {
                                     throw std::runtime_error("Failed to insert sync data, error code: " + std::to_string(result));
-                                }
-                            }
-
-                            // 4. 执行后置SQL（postamble）
-                            if (!postamble.empty())
-                            {
-                                DLOG(ERROR) << "123456789 执行后置SQL: " << postamble;
-                                int result = OH_Rdb_ExecuteV2(globalStore, postamble.c_str(), nullptr, nullptr);
-                                if (result != RDB_OK)
-                                {
-                                    throw std::runtime_error("Failed to execute postamble SQL, error code: " + std::to_string(result));
                                 }
                             }
 
@@ -1868,7 +1880,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                 throw jsi::JSError(rt, "Failed to commit transaction for sync loading");
                             }
                             DLOG(ERROR) << "123456789 unsafeLoadFromSync完成";
-                            return jsi::Value::null();
+                            return jsi::Value(true);
                         }
                         else
                         {
@@ -1900,7 +1912,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                         throw jsi::JSError(rt, "unsafeExecuteMultiple requires 1 argument");
                     }
 
-                    auto sqlString = args[0].getString(rt).utf8(rt);
+                    std::string sqlString = args[0].getString(rt).utf8(rt);
 
                     DLOG(ERROR) << "123456789 unsafeExecuteMultiple调用 - SQL长度: " << sqlString.length();
 
@@ -2000,6 +2012,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                 int execResult = OH_Rdb_ExecuteV2(globalStore, sql.c_str(), nullptr, nullptr);
                                 if (execResult != RDB_OK)
                                 {
+                                    DLOG(ERROR) << "123456789 正在执行失败第 " << (i + 1) << " 个SQL: " << sql << ", 错误码: " << execResult;
                                     success = false;
                                     errorMessage = "Execute failed for SQL #" + std::to_string(i + 1) + ": " + sql + ", error code: " + std::to_string(execResult);
                                     break;
@@ -2185,15 +2198,20 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                 // 遍历所有表并删除
                                 while (cursor->goToNextRow(cursor) == RDB_OK)
                                 {
+                                    DLOG(ERROR) << "123456789 删除所有表";
                                     char tableName[256];
-                                    int nameLength = 0;
+                                    int nameLength = 256;
                                     // 修复：传递变量本身，而不是地址
                                     if (cursor->getText(cursor, 0, tableName, nameLength) == RDB_OK)
                                     {
                                         std::string table(tableName);
+                                        DLOG(ERROR) << "123456789 删除所有表1111111" << tableName;
                                         if (table != "android_metadata") // 排除系统表
                                         {
-                                            std::string dropSql = "DROP TABLE IF EXISTS " + table;
+                                            DLOG(ERROR) << "123456789 删除所有表22222";
+                                            // std::string dropSql = "DROP TABLE IF EXISTS " + table;
+                                            std::string dropSql = "DROP TABLE movies";
+                                            DLOG(ERROR) << "123456789 删除所有表sql" << dropSql;
                                             int dropResult = OH_Rdb_ExecuteV2(globalStore, dropSql.c_str(), nullptr, nullptr);
                                             if (dropResult != RDB_OK)
                                             {
@@ -2207,33 +2225,6 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
                                     }
                                 }
                                 cursor->destroy(cursor);
-                            }
-                            else
-                            {
-                                // 如果无法查询表，使用预定义的表列表
-                                std::vector<std::string> predefinedTables = {"local_storage", "sync_metadata", "changes", "movies"};
-                                for (const auto &table : predefinedTables)
-                                {
-                                    std::string dropSql = "DROP TABLE IF EXISTS " + table;
-                                    int dropResult = OH_Rdb_ExecuteV2(globalStore, dropSql.c_str(), nullptr, nullptr);
-                                    if (dropResult != RDB_OK)
-                                    {
-                                        DLOG(ERROR) << "123456789 删除预定义表失败: " << table;
-                                    }
-                                    else
-                                    {
-                                        DLOG(ERROR) << "123456789 删除预定义表: " << table;
-                                    }
-                                }
-                            }
-
-                            // 清理WAL文件（如果支持）
-                            // 执行VACUUM清理数据库空间
-                            std::string vacuumSql = "VACUUM";
-                            int vacuumResult = OH_Rdb_ExecuteV2(globalStore, vacuumSql.c_str(), nullptr, nullptr);
-                            if (vacuumResult != RDB_OK)
-                            {
-                                DLOG(ERROR) << "123456789 VACUUM操作失败";
                             }
 
                             // 提交事务
@@ -2270,7 +2261,7 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
             // 将所有方法设置到适配器对象上
             adapter.setProperty(rt, "initialize", std::move(initializeFunc));
             adapter.setProperty(rt, "setUpWithSchema", std::move(setUpWithSchemaFunc));
-            adapter.setProperty(rt, "setUpWithMigrations", std::move(setUpWithMigrationsFunc));
+            adapter.setProperty(rt, "setUpWithMigrations", std::move(setUpWithMigrationsFunc)); //
             adapter.setProperty(rt, "find", std::move(findFunc));
             adapter.setProperty(rt, "query", std::move(queryFunc));
             adapter.setProperty(rt, "queryAsArray", std::move(queryAsArrayFunc));
@@ -2280,11 +2271,11 @@ void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)
             adapter.setProperty(rt, "batch", std::move(batchFunc));
             adapter.setProperty(rt, "batchJSON", std::move(batchJSONFunc));
             adapter.setProperty(rt, "getLocal", std::move(getLocalFunc));
-            adapter.setProperty(rt, "unsafeLoadFromSync", std::move(unsafeLoadFromSyncFunc));
-            adapter.setProperty(rt, "unsafeExecuteMultiple", std::move(unsafeExecuteMultipleFunc));
+            adapter.setProperty(rt, "unsafeLoadFromSync", std::move(unsafeLoadFromSyncFunc));       //
+            adapter.setProperty(rt, "unsafeExecuteMultiple", std::move(unsafeExecuteMultipleFunc)); //
             adapter.setProperty(rt, "setLocal", std::move(setLocalFunc));
             adapter.setProperty(rt, "removeLocal", std::move(removeLocalFunc));
-            adapter.setProperty(rt, "unsafeResetDatabase", std::move(unsafeResetDatabaseFunc));
+            adapter.setProperty(rt, "unsafeResetDatabase", std::move(unsafeResetDatabaseFunc)); //
 
             return adapter;
         });
