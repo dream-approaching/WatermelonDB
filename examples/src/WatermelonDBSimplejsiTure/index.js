@@ -131,7 +131,7 @@ const WatermelonDBSimplejsiTure = () => {
     return true;
   }, [adapter, addLog]);
 
-  // ========== 新增：数据库初始化（创建表+插入测试数据） ==========
+  // ========== 新增：数据库初始化1（创建表） ==========
   const initTestDatabase = useCallback(async () => {
     
     if (!checkAdapter()) return;
@@ -147,7 +147,19 @@ const WatermelonDBSimplejsiTure = () => {
           dbName, JSON.parse(DEFAULT_SCHEMA) , parseInt(dbVersion)
       );
       addLog('success', '✅ movies表创建成功');
+    } catch (error) {
+      addLog('error', `❌ 测试数据库初始化失败: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [checkAdapter, adapter, dbName, dbVersion, schemaJson, batchJson, addLog]);
 
+// ========== 新增：数据库初始化2（插入测试数据） ==========
+  const initTestData = useCallback(async () => {
+    
+    if (!checkAdapter()) return;
+    setLoading(true);
+    try {
       // 3. 批量插入测试数据
       const operations = JSON.parse(batchJson);
       await adapter.batch(operations);
@@ -157,11 +169,11 @@ const WatermelonDBSimplejsiTure = () => {
       setTestDataResult(result);
       addLog('success', `✅ 查到${result?.length || 0} 条数据`);
     } catch (error) {
-      addLog('error', `❌ 测试数据库初始化失败: ${error.message}`);
+      addLog('error', `❌ 测试数据插入失败`);
     } finally {
       setLoading(false);
     }
-  }, [checkAdapter, adapter, dbName, dbVersion, schemaJson, batchJson, addLog]);
+  }, [checkAdapter, adapter, dbName, batchJson, addLog]);
 
   // ========== 新增：插入单条测试数据 ==========
   const insertTestData = useCallback(async () => {
@@ -575,6 +587,7 @@ const WatermelonDBSimplejsiTure = () => {
 
       // 2. 初始化数据库+创建表+插入测试数据
       await initTestDatabase();
+      await initTestData();
 
       // 3. 遍历测试所有方法
       const methodMap = {
@@ -617,7 +630,7 @@ const WatermelonDBSimplejsiTure = () => {
       setLoading(false);
     }
   }, [
-    createAdapter, initTestDatabase, testInitialize, testSetUpWithSchema,
+    createAdapter, initTestDatabase, initTestData, testInitialize, testSetUpWithSchema,
     testFind, testQuery, testQueryAsArray, testQueryIds, testUnsafeQueryRaw,
     testCount, testBatch, testBatchJSON, testGetLocal, testSetLocal, testRemoveLocal,
     testUnsafeLoadFromSync, testUnsafeExecuteMultiple, clearLogs, addLog
@@ -726,7 +739,7 @@ const WatermelonDBSimplejsiTure = () => {
               onPress={initTestDatabase}
               disabled={loading}
             >
-              <Text style={styles.btnText}>初始化数据库</Text>
+              <Text style={styles.btnText}>初始化</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -735,10 +748,10 @@ const WatermelonDBSimplejsiTure = () => {
                 loading && styles.btnDisabled,
                 pressed && !loading && styles.btnPressed
               ]}
-              onPress={testAllMethods}
+              onPress={initTestData}
               disabled={loading}
             >
-              <Text style={styles.btnText}>全量测试</Text>
+              <Text style={styles.btnText}>插入默认数据</Text>
             </Pressable>
           </View>
         </View>
@@ -1028,7 +1041,18 @@ const WatermelonDBSimplejsiTure = () => {
             {renderTestDataResult()}
           </View>
         </View>
-
+        <Pressable
+          style={({ pressed }) => [
+            styles.btn, 
+            styles.btnWarning, 
+            loading && styles.btnDisabled,
+            pressed && !loading && styles.btnPressed
+          ]}
+          onPress={testAllMethods}
+          disabled={loading}
+        >
+          <Text style={styles.btnText}>全量测试</Text>
+        </Pressable>
         {/* 5. 日志展示区 */}
         <View style={styles.module}>
           <Text style={styles.moduleTitle}>5. 测试日志</Text>
