@@ -51,12 +51,35 @@ class SqliteNativeModulesDispatcher implements SqliteDispatcher {
       methodName = 'batchJSON'
       args = [JSON.stringify(args[0])]
     } else if (
-      ['initialize', 'setUpWithSchema', 'setUpWithMigrations'].includes(methodName) &&
-      Platform.OS === 'android'
+      ['initialize', 'setUpWithSchema', 'setUpWithMigrations'].includes(methodName)
     ) {
-      // FIXME: Hacky, refactor once native reuse isn't an "unsafe experimental" option
-      args.push(this._unsafeNativeReuse)
+      // HarmonyOS TurboModule also requires unsafeNativeReuse parameter
+      // Check for both Android and HarmonyOS (which may report as 'harmony' or 'openharmony')
+      const needsUnsafeNativeReuse = 
+        Platform.OS === 'android' || 
+        Platform.OS === 'harmony' || 
+        (typeof Platform.OS === 'string' && Platform.OS.toLowerCase().includes('harmony'))
+      
+      if (needsUnsafeNativeReuse) {
+        // FIXME: Hacky, refactor once native reuse isn't an "unsafe experimental" option
+        args.push(this._unsafeNativeReuse)
+      }
     }
+    
+    if (!this._bridge) {
+      const error = new Error('WMDatabaseBridge TurboModule is not defined!')
+      console.error('[WatermelonDB] ❌ Bridge is null/undefined')
+      callback({ error })
+      return
+    }
+    
+    if (typeof this._bridge[methodName] !== 'function') {
+      const error = new Error(`Method ${methodName} is not available on WMDatabaseBridge. Available methods: ${Object.keys(this._bridge).join(', ')}`)
+      console.error('[WatermelonDB] ❌ Method not found:', error.message)
+      callback({ error })
+      return
+    }
+    
     fromPromise(this._bridge[methodName](this._tag, ...args), callback)
   }
 }
@@ -66,7 +89,23 @@ class SqliteJsiDispatcher implements SqliteDispatcher {
   _unsafeErrorListener: (Error) => void // debug hook for NT use
 
   constructor(dbName: string, { usesExclusiveLocking }: SqliteDispatcherOptions): void {
-    this._db = global.nativeWatermelonCreateAdapter(dbName, usesExclusiveLocking)
+    
+    if (!global.nativeWatermelonCreateAdapter) {
+      const error = new Error(
+        `global.nativeWatermelonCreateAdapter is not defined. JSI is not properly installed or initialized. ` +
+        `Please ensure WMDatabaseJSIBridge.install() was called successfully before creating SQLiteAdapter with jsi: true.`
+      )
+      console.error('[WatermelonDB] ❌ JSI Dispatcher creation failed:', error)
+      throw error // Crash early if JSI is expected but not available
+    }
+    
+    try {
+      this._db = global.nativeWatermelonCreateAdapter(dbName, usesExclusiveLocking)
+    } catch (error) {
+      console.error('[WatermelonDB] ❌ Failed to create native adapter:', error)
+      throw error
+    }
+    
     this._unsafeErrorListener = () => {}
   }
 

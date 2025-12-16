@@ -44,7 +44,5 @@ export namespace WMDatabaseBridge {
   
     getRandomIds(): string;
   
-    initializeJSI(): void;
-  
   }
 }

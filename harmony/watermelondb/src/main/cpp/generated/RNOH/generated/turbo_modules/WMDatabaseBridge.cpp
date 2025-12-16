@@ -24,7 +24,6 @@ WMDatabaseBridge::WMDatabaseBridge(const ArkTSTurboModule::Context ctx, const st
         ARK_ASYNC_METHOD_METADATA(provideSyncJson, 2),
         ARK_METHOD_METADATA(getRandomBytes, 1),
         ARK_METHOD_METADATA(getRandomIds, 0),
-        ARK_METHOD_METADATA(initializeJSI, 0),
     };
 }
 

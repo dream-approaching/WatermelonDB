@@ -36,7 +36,7 @@ static jsi::Value hostFunction_MyTMTurboModule_install(jsi::Runtime &rt, react::
 
 RNWMDatabaseJSIBridge::RNWMDatabaseJSIBridge(const RNWMDatabaseJSIBridge::Context ctx, const std::string name) : WMDatabaseJSIBridge(ctx, name)
 {
-    methodMap_["myInstall"] = MethodMetadata{0, hostFunction_MyTMTurboModule_install};
+    methodMap_["install"] = MethodMetadata{0, hostFunction_MyTMTurboModule_install};
 }
 
 void RNWMDatabaseJSIBridge::JSIInstall(facebook::jsi::Runtime &rt)

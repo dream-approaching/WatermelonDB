@@ -35,7 +35,6 @@ export interface Spec extends TurboModule {
   provideSyncJson: (id: number, syncPullResultJson: string) => Promise<boolean>,
   getRandomBytes: (count: number) => number[],
   getRandomIds?: () => string,
-  initializeJSI?: () => void,
 };
 
 export default TurboModuleRegistry.getEnforcing<Spec>("WMDatabaseBridge");
