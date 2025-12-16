@@ -1,0 +1,53 @@
+{
+  app: {
+    products: [
+      {
+        name: 'default',
+        signingConfig: 'default',
+        compatibleSdkVersion: '5.0.0(12)',
+        runtimeOS: 'HarmonyOS',
+      },
+    ],
+    buildModeSet: [
+      {
+        name: 'debug',
+      },
+      {
+        name: 'release',
+      },
+    ],
+    signingConfigs: [
+      {
+        name: 'default',
+        type: 'HarmonyOS',
+        material: {
+          certpath: 'C:\\Users\\Administrator\\.ohos\\config\\default_harmony_26_yU7h-SII3q9qYvGxqNgUyFyrRNb9IQSFqKgZqAdo=.cer',
+          keyAlias: 'debugKey',
+          keyPassword: '0000001B08EC8279B13ED14FDDB779CE5B8D6BF3C297F54AC9EBE2B411D7F47F41DA212387F83791308EA9',
+          profile: 'C:\\Users\\Administrator\\.ohos\\config\\default_harmony_26_yU7h-SII3q9qYvGxqNgUyFyrRNb9IQSFqKgZqAdo=.p7b',
+          signAlg: 'SHA256withECDSA',
+          storeFile: 'C:\\Users\\Administrator\\.ohos\\config\\default_harmony_26_yU7h-SII3q9qYvGxqNgUyFyrRNb9IQSFqKgZqAdo=.p12',
+          storePassword: '0000001B88D052996AA9F2977D9DB502C3FCE13797A340D3979D931FC1299C377CBA832BF4EB8C53D7E426',
+        },
+      },
+    ],
+  },
+  modules: [
+    {
+      name: 'entry',
+      srcPath: './entry',
+      targets: [
+        {
+          name: 'default',
+          applyToProducts: [
+            'default',
+          ],
+        },
+      ],
+    },
+    {
+      name: 'watermelondb',
+      srcPath: '../../harmony/watermelondb',
+    },
+  ],
+}

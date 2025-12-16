@@ -1,4 +1,4 @@
-import { appSchema, tableSchema } from "@react-native-ohos/watermelondb";
+import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
 export const mySchema = appSchema({
   version: 1,

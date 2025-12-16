@@ -9,11 +9,12 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Database } from '@react-native-ohos/watermelondb';
-import SQLiteAdapter from '@react-native-ohos/watermelondb/adapters/sqlite';
-import { DatabaseProvider, useDatabase } from '@react-native-ohos/watermelondb/react';
+import { Database } from '@nozbe/watermelondb';
+import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
+import { DatabaseProvider, useDatabase } from '@nozbe/watermelondb/react';
 import { mySchema } from './models/schema';
 import { dbModels } from './models/index.js';
+import { SAMPLE_MOVIES, SAMPLE_REVIEWS } from './mockdata.js';
 
 const adapter = new SQLiteAdapter({
   dbName: 'WatermelonDemo',
@@ -28,38 +29,6 @@ const database = new Database({
   adapter,
   modelClasses: dbModels,
 });
-
-const SAMPLE_MOVIES = [
-  {
-    title: '星际穿越',
-    posterImage:
-      'https://image.tmdb.org/t/p/original/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg',
-    genre: '科幻',
-    description: '一段跨越宇宙与时间、寻找新家园的旅程。',
-  },
-  {
-    title: '疯狂动物城',
-    posterImage:
-      'https://image.tmdb.org/t/p/original/hlK0e0wAQ3VLuJcsfIYPvb4JVud.jpg',
-    genre: '动画',
-    description: '一只兔子警官与狐狸搭档，揭开阴谋、守护城市。',
-  },
-  {
-    title: '速度与激情 10',
-    posterImage:
-      'https://image.tmdb.org/t/p/original/qDRGPAcQoW8Wuig9bvoLpHwf1gU.jpg',
-    genre: '动作',
-    description: '家人永远是第一位，飙车、爆炸、热血永不停歇。',
-  },
-];
-
-const SAMPLE_REVIEWS = [
-  '剧情紧凑，完全停不下来！',
-  '配乐太棒了，影院体验绝佳。',
-  '主角魅力满分，期待续作。',
-  '画面惊艳，值得二刷三刷。',
-  '故事内核很温暖，看完心情很好。',
-];
 
 const randomItem = (items) => items[Math.floor(Math.random() * items.length)];
 
@@ -109,10 +78,6 @@ const MovieCard = ({ movie, onAddReview, onRename, onDelete }) => {
       const subscription = movie.observe().subscribe({
         next: (updatedMovie) => {
           const newInfo = updatedMovie.getMovie();
-          console.log('%c watermelondbConsoleLogger movie card updated:', 'color: #0e93e0;background: #aaefe5;', {
-            id: updatedMovie.id,
-            newTitle: newInfo.title,
-          });
           setMovieInfo(newInfo);
         },
         error: (error) => console.warn('订阅电影变化失败', error),
@@ -159,10 +124,6 @@ const MovieScreen = () => {
   useEffect(() => {
     const subscription = moviesCollection.query().observe().subscribe({
       next: (list) => {
-        console.log('%c watermelondbConsoleLogger movies list updated:', 'color: #0e93e0;background: #aaefe5;', {
-          count: list.length,
-          titles: list.map(m => m.title),
-        });
         setMovies(list);
         setLoading(false);
       },
@@ -172,17 +133,7 @@ const MovieScreen = () => {
   }, [moviesCollection]);
 
   const seedDemoData = useCallback(async () => {
-    console.log(
-      '%c watermelondbConsoleLogger moviesCollection:',
-      'color: #0e93e0;background: #aaefe5;',
-      moviesCollection,
-    );
     const current = await moviesCollection.query().fetch();
-    console.log(
-      '%c watermelondbConsoleLogger current:',
-      'color: #0e93e0;background: #aaefe5;',
-      current,
-    );
     if (current.length > 0) {
       Alert.alert('提示', '数据库中已经有电影数据，无需重复导入。');
       return;
@@ -227,23 +178,15 @@ const MovieScreen = () => {
   const renameMovie = useCallback(
     async (movie) => {
       try {
-        console.log('%c watermelondbConsoleLogger renameMovie before:', 'color: #0e93e0;background: #aaefe5;', movie.title);
         await databaseInstance.write(async () => {
           await movie.update((record) => {
             const baseTitle = record.title.split(' · ')[0];
             const newTitle = `${baseTitle} · v${Math.floor(Math.random() * 10 + 1)}`;
-            console.log('%c watermelondbConsoleLogger renameMovie updating:', 'color: #0e93e0;background: #aaefe5;', {
-              oldTitle: record.title,
-              baseTitle,
-              newTitle,
-            });
             record.title = newTitle;
           });
         });
-        console.log('%c watermelondbConsoleLogger renameMovie after:', 'color: #0e93e0;background: #aaefe5;', movie.title);
       } catch (error) {
         console.error('[WatermelonDemo] 随机改名失败', error);
-        Alert.alert('错误', `随机改名失败: ${error.message}`);
       }
     },
     [databaseInstance],
@@ -297,7 +240,6 @@ const MovieScreen = () => {
 };
 
 export default function WatermelonDemo() {
-  console.log('%c watermelondbConsoleLogger WatermelonDemo:', 'color: #0e93e0;background: #aaefe5;', 'WatermelonDemo');
   return (
     <DatabaseProvider database={database}>
       <MovieScreen />

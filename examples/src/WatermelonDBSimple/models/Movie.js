@@ -1,5 +1,5 @@
-import { Model } from "@react-native-ohos/watermelondb";
-import { field, date, children } from "@react-native-ohos/watermelondb/src/decorators";
+import { Model } from "@nozbe/watermelondb";
+import { field, date, children } from "@nozbe/watermelondb/decorators";
 
 export default class Movie extends Model {
   static table = "movies";

@@ -6,6 +6,7 @@
   "version": "1.0.0",
   "dependencies": {
     "@rnoh/react-native-openharmony": "0.72.32",
-    "@react-native-ohos/watermelondb": "file:../../../harmony/watermelondb"
+        "@react-native-ohos/watermelondb": "file:../../node_modules/@react-native-ohos/watermelondb/harmony/watermelondb.har"
+//    "@react-native-ohos/watermelondb": "file:../../../harmony/watermelondb"
   }
 }
