@@ -1,4 +1,4 @@
-import { Model } from '@nozbe/watermelondb'
+import { Model } from '@react-native-ohos/watermelondb'
 import {
   children,
   date,
@@ -6,7 +6,7 @@ import {
   relation,
   text,
   writer,
-} from '@nozbe/watermelondb/decorators'
+} from '@react-native-ohos/watermelondb/decorators'
 
 export default class Task extends Model {
   static table = 'tasks'

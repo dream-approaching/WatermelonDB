@@ -24,11 +24,35 @@
 
 #pragma once
 
+#include "RNOH/Package.h"
+#include "RNWMDatabaseJSIBridge.h"
 #include "generated/RNOH/generated/BaseWatermelondbPackage.h"
 
-namespace rnoh {
-class WatermelondbPackage : public BaseWatermelondbPackage {
-    using Super = BaseWatermelondbPackage;
-    using Super::Super;
-};
+namespace rnoh
+{
+
+    class WatermelondbPackageTurboModuleFactoryDelegate : public BaseWatermelondbPackageTurboModuleFactoryDelegate
+    {
+    public:
+        SharedTurboModule createTurboModule(Context ctx, const std::string &name) const override
+        {
+            if (name == "WMDatabaseJSIBridge")
+            {
+                return std::make_shared<RNWMDatabaseJSIBridge>(ctx, name);
+            }
+            return BaseWatermelondbPackageTurboModuleFactoryDelegate::createTurboModule(ctx, name);
+        };
+    };
+
+    class WatermelondbPackage : public BaseWatermelondbPackage
+    {
+        using Super = BaseWatermelondbPackage;
+        using Super::Super;
+
+        std::unique_ptr<TurboModuleFactoryDelegate> createTurboModuleFactoryDelegate() override
+        {
+            return std::make_unique<WatermelondbPackageTurboModuleFactoryDelegate>();
+        }
+    };
+
 } // namespace rnoh

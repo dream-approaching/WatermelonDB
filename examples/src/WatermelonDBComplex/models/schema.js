@@ -1,8 +1,8 @@
-import { appSchema, tableSchema } from '@nozbe/watermelondb'
+import { appSchema, tableSchema } from '@react-native-ohos/watermelondb'
 import {
   createTable,
   schemaMigrations,
-} from '@nozbe/watermelondb/Schema/migrations'
+} from '@react-native-ohos/watermelondb/Schema/migrations'
 
 export const mySchema = appSchema({
   version: 2,

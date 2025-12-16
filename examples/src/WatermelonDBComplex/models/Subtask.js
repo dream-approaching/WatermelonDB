@@ -1,5 +1,5 @@
-import { Model } from '@nozbe/watermelondb'
-import { field, json, relation, writer } from '@nozbe/watermelondb/decorators'
+import { Model } from '@react-native-ohos/watermelondb'
+import { field, json, relation, writer } from '@react-native-ohos/watermelondb/decorators'
 
 const extraSanitizer = (value) => {
   if (!value) {

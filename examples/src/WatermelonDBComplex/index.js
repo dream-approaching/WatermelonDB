@@ -9,37 +9,37 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Database, Q } from '@nozbe/watermelondb';
-import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
-import { DatabaseProvider, useDatabase } from '@nozbe/watermelondb/react';
+import { Database, Q } from '@react-native-ohos/watermelondb';
+import SQLiteAdapter from '@react-native-ohos/watermelondb/adapters/sqlite';
+import { DatabaseProvider, useDatabase } from '@react-native-ohos/watermelondb/react';
 import { mySchema, migrations } from './models/schema';
 import { dbModels } from './models/index.js';
 import { SAMPLE_PROJECTS, SAMPLE_TASKS } from './mockdata.js';
+import CollectionTestPage from './test/CollectionTestPage'; // 导入测试页面
 
+// 适配器
+const adapter = new SQLiteAdapter({
+  dbName: 'WatermelonDBComplex', // 数据库名
+  schema: mySchema, // 确保 schema 正确导入
+  migrations: migrations || [], // 兼容空迁移
+  jsi: false, // 禁用 JSI（避免原生依赖问题，优先保证 JS 层运行）
+  onSetUpError: (err) => {
+    console.error('数据库适配器初始化失败:', err); // 捕获适配器错误
+  },
+});
 
-let adapter;
-try {
-  adapter = new SQLiteAdapter({
-    dbName: 'WatermelonDemo',
-    schema: mySchema,
-    migrations,
-    jsi: false, // ⚠️ 设置为 true 需要确保 JSI 已正确安装（WMDatabaseJSIBridge.install() 成功）
-    // 如果设置 jsi: true 但 JSI 未安装成功，会导致崩溃（界面空白且无日志）
-    onSetUpError: (error) => {
-      Alert.alert('数据库初始化失败', error.message || String(error));
-    },
-  });
-  console.log('[WatermelonDemo] SQLiteAdapter 创建完成，dispatcherType:', adapter._dispatcherType);
-} catch (error) {
-  console.error('[WatermelonDemo] ❌ SQLiteAdapter 创建时发生异常:', error);
-  throw new Error(`SQLiteAdapter 初始化失败: ${error.message}`);
+// 创建数据库实例并添加日志
+export const databaseMain = new Database({
+  adapter,
+  modelClasses: dbModels, // 确保模型类数组正确
+});
+
+// 验证数据库实例是否创建成功
+console.log('数据库实例创建结果:', databaseMain); // 检查控制台输出
+if (!databaseMain) {
+  throw new Error('数据库实例创建失败！');
 }
 
-// 2）创建 Database，注册 Model
-const database = new Database({
-  adapter,
-  modelClasses: dbModels,
-});
 
 const randomItem = (items) => items[Math.floor(Math.random() * items.length)];
 
@@ -363,19 +363,19 @@ const ProjectTaskScreen = () => {
     );
   };
 
-  return (
+   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>WatermelonDB 项目/任务 Demo</Text>
-        <Text style={styles.subtitle}>
-          演示 Database / Model / Q / SQLiteAdapter / schemaMigrations / appSchema /
-          children / field / text / writer / Associations / Relation / json / date / tableSchema。
-        </Text>
         <View style={styles.actionRow}>
           <ActionButton label="导入示例项目" onPress={seedDemoData} />
           <ActionButton label="随机新增项目" type="secondary" onPress={addRandomProject} />
           <ActionButton label="清空所有" type="danger" onPress={clearAll} />
         </View>
+        <Text style={styles.pageHeader}>WatermelonDB 复杂示例</Text>
+        
+        {/* 嵌入 Collection API 测试页面 */}
+        <CollectionTestPage database={databaseMain}/>
         <Text style={styles.countText}>
           当前共有 {projects.length} 个项目，已选中：
           {selectedProject ? selectedProject.name : '无'}
@@ -418,9 +418,9 @@ const ProjectTaskScreen = () => {
 };
 
 export default function WatermelonDemo() {
-  console.log('%c watermelondbConsoleLogger database:', 'color: #0e93e0;background: #aaefe5;', database);
+  console.log('%c watermelondbConsoleLogger database:', 'color: #0e93e0;background: #aaefe5;', databaseMain);
   return (
-    <DatabaseProvider database={database}>
+    <DatabaseProvider database={databaseMain}>
       <ProjectTaskScreen />
     </DatabaseProvider>
   );

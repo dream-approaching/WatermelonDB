@@ -1,5 +1,5 @@
-import { Model } from '@nozbe/watermelondb'
-import { relation, text, writer } from '@nozbe/watermelondb/decorators'
+import { Model } from '@react-native-ohos/watermelondb'
+import { relation, text, writer } from '@react-native-ohos/watermelondb/decorators'
 
 export default class Note extends Model {
   static table = 'notes'

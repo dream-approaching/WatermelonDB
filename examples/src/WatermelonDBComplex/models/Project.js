@@ -1,5 +1,5 @@
-import { Model } from '@nozbe/watermelondb'
-import { children, date, json, text, writer } from '@nozbe/watermelondb/decorators'
+import { Model } from '@react-native-ohos/watermelondb'
+import { children, date, json, text, writer } from '@react-native-ohos/watermelondb/decorators'
 
 
 const metadataSanitizer = (value) => {

@@ -8,6 +8,7 @@
 #include "RNOH/ArkTSTurboModule.h"
 #include "RNOH/generated/turbo_modules/WMDatabaseBridge.h"
 #include "RNOH/generated/turbo_modules/WMDatabaseJSIBridge.h"
+#include <iostream>  // 添加标准输出头文件
 
 namespace rnoh {
 
